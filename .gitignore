@@ -1,5 +1,8 @@
 # venv
+cache/
 ccslid_env/
+scanpy_course/3k_PBMC
+*.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
