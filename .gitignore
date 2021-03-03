@@ -4,6 +4,26 @@ ccslid_env/
 scanpy_course/3k_PBMC
 *.zip
 
+# latex
+*.out
+*.aux
+*.log
+*.dvi
+*.fdb_latexmk
+*.fls
+*.gz
+*.bbl
+*.bcf
+*.blg
+*.xml
+*.toc
+core*
+*.maf
+*.mtc
+*.mtc0
+*.pdf
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
