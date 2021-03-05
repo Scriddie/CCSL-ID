@@ -2,6 +2,10 @@
 \usepackage{amsmath}
 \usepackage[left=1.2in, right=1.2in, top=1.2in, bottom=1.2in]{geometry}
 
+\usepackage{natbib}
+    \bibliographystyle{plainnat} 
+    \renewcommand{\bibsection}{\subsubsection*{References}}
+
 \title{Mechanistic Causality}
 \author{Alexander Reisach}
 
@@ -9,24 +13,45 @@
 \maketitle
     
 \section{Introduction}
-We define interventional dependence and directionality of the dependence as devining characteristics of a causal relationship between two variables.
+In the framework of \cite{brady2008causation}, my approach follows the \emph{Manipulation} and \emph{Mechanism} approaches to causality. 
+We define interventional dependence and directionality of the dependence as defining characteristics of a causal relationship between two variables.
 For our purposes, we observe the equilibrium states $\epsilon_t$ with $t \in 1 \dots n$ of a closed system $S$ with known components $c_i$ with $i \in 1 \dots n$. 
 
-\subsection{Causal Derivatives}
-Causal BMI example!
+\section{Causal Derivatives}
+Causal BMI-PDE example!
+In a suitable PDE setup, an intervention on the rate of change would \emph{cause} a new equilibrium stock size of the integral quantity.
 
-\subsection{Causality Between Dimensionally Independent SI units}
-We postulate that causal effects are impossible between variables which are measured in dimensionally dependent units. Between 
+\section{Causality Between Dimensionally Independent SI units}
+We postulate that causal effects are impossible between variables which are measured in dimensionally dependent units.
 
-\paragraph{Example} In a chamber full of negatively charged particles, the magnitude of their charge could be conceived as the cause for their relative location/distance from one another. The relationship is not reciprocal due to the dimensional independence of the units. By contrast, the force between them would not be a cause of the location, as a change in location would also change the force between them. The two quantities share a SI dimension and the effect is reciprocal.
+\paragraph{Example} In a chamber full of negatively charged particles, the magnitude of their charge could be conceived as the cause for their relative location/distance from one another. The relationship is not reciprocal due to the dimensional independence of the units. By contrast, the force between them would not be a cause of the location, as a change in location would also change the force between them. Neither would the location of one be the cause of the location of the other. The two quantities share a SI dimension and the effect is reciprocal.
 
-\subsection{Causality as Disproportionality}
-Causality could be conceived of as disproportionality in a reciprocal relationship. 
+\section{Causality as Disproportionality}
+Causality could be conceived of as disproportionality in a reciprocal relationship. Accepting this definition of causality would imply that knowledge of the correct relative data scale is indeed crucial for determining causal relationships
 
-\paragraph{Example} Imagine the same chamber of charged particles as before. I one of the particles had a mass vastly greater than any of the others, its location would have a much bigger impact on the location of the other particles than vice versa.\\
+\paragraph{Example} Imagine the same chamber of charged particles as before. I one of the particles had a mass vastly greater than any of the others, its location would have a much bigger impact on the location of the other particles than vice versa.
 
-This effect is not only conceivable between two variables associated with real-world objects. It could also arise in a scenario where one variable measures an aggregate quantity of a collection of individual objects.
+\subsection{Disproportionality in Importance}
+Maybe the way we define or attribute importance to events is the root of causality. In this sense, a disproportionality might be any sufficiently big difference in the importance of the effect with respect to the objects in the eyes of an observer.
 
-Accepting this definition of causality would imply that the data scale is indeed crucial for determining causal relationships
+\paragraph{Example}
+Think a football \emph{causing} a window to break. Strictly speaking, this event reverberates through the whole universe, and the  window surely causes deformation in the ball as well. However, in the eyes of an observer, the effect on the vase might be more important and therefre seem to be the \emph{Effect}.
+
+\subsection{Causality by Definition of In- and Out-System}
+
+The question might be "what exactly is an intervention"!
+In reality anything we could possibly observe is within the same reality. However, the notion of intervention seems to imply a distinction between a closed system and an outside that might "intervene". This is akin to postulating that the "inside" system has no effect (of any importance) on the outside system. Feedback-loops show the conceptional limitations of this idea of causality.
+The disproportionality lies in the definition of the two system. The very idea of an intervention builds upon this distinction and implies that the out-system can act on the in-system without reciprocal effects. 
+
+\emph{Example} An agent in a computer game can perform actions without a reciprocal effect. In reality this is not possible. Nonetheless, the computer game seems a natural approximation. Switching on the light, it seems natural to interpret the switch, wiring, and light bulb as a closed system that one intervenes on.
+
+\subsection{Causality in Hierarchies}
+This effect is not only conceivable between two variables associated with real-world objects. It could also arise in a scenario where one variable measures an aggregate quantity of a collection of individual objects. Such relationships could conceivably emerge in complex systems of similar particles. In this definition, the disproportionality is in the number of interventions on one variable that would \emph{cause} an effect in the other.
+
+\paragraph{Example} Imagine a pool table. Let one variable represent the location of one of the balls and another variable represent the average location of all of the balls. A change in the first variable would cause a change in the second, but not necessarily vice versa. The corresponding macro-example would be a light switch \emph{causing} the light to go on.
+
+
+\clearpage
+\bibliography{references}
 
 \end{document}

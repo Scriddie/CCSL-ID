@@ -12,6 +12,8 @@ import seaborn as sb
 import rpy2
 import rpy2.robjects as ro
 from rpy2.robjects.packages import importr
+import rpy2.robjects.numpy2ri as rn
+rn.activate()
 # ro.r('library()')
 
 
@@ -68,14 +70,38 @@ barcodes = adata_raw.obs_names
 
 # TODO run this R stuff
 """Run EmptyDrops."""
-nr, nc = sparse_mat.shape
 ro.r("library(Matrix)")
-ro.r.sparseMatrix(
-    i=ro.IntVector(nr + 1),
-    j=ro.IntVector(nc + 1),
-    x=ro.FloatVector(sparse_mat.data),
-    dims=ro.IntVector(sparse_mats.hape))
-# ro.r.matrix(sparse_mat, nrow=nr, ncol=nc)
+sparse_mat_coo = sparse_mat.tocoo()
+sparse_mat_r = ro.r.sparseMatrix(
+    i=ro.IntVector(sparse_mat_coo.row + 1),
+    j=ro.IntVector(sparse_mat_coo.col + 1),
+    x=ro.FloatVector(sparse_mat_coo.data),
+    dims=ro.IntVector(sparse_mat_coo.shape))
+ro.globalenv["sparse_mat"] = sparse_mat_r
+
+genes_coo = sparse_mat.tocoo()
+genes_r = ro.r.sparseMatrix(
+    i=ro.IntVector(genes_coo.row + 1),
+    j=ro.IntVector(genes_coo.col + 1),
+    x=ro.FloatVector(genes_coo.data),
+    dims=ro.IntVector(genes_coo.shape))
+ro.globalenv["genes"] = genes_r    
+
+# barcodes_coo = barcodes.tocoo()
+barcodes_r = ro.r.c(list(barcodes))
+ro.globalenv["barcodes"] = barcodes_r
+
+# """Empty drops returns a list of potentially ambient genes and the barcodes, which belong to actual cells."""
+ro.r(""" 
+    library(SingleCellExperiment)
+    sce = SingleCellExperiment(assays=list(counts=sparse_mat),colData=barcodes);
+    rownames(sce) = genes;
+    ambient = emptyDrops(counts(sce));
+    is_cell = ambient$FDR <= 0.05;
+    threshold_ambient = 0.005;
+    ambient_genes = names(ambient@metadata$ambient[ambient@metadata$ambient > threshold_ambient, ]);
+    barcodes_filtered = barcodes[which(is_cell)];
+""")
 
 # Commented out IPython magic to ensure Python compatibility.
 # %%R -i sparse_mat -i genes -i barcodes -o barcodes_filtered -o ambient_genes
@@ -88,11 +114,11 @@ ro.r.sparseMatrix(
 # ambient_genes <- names(ambient@metadata$ambient[ambient@metadata$ambient> threshold_ambient,])
 # barcodes_filtered <- barcodes[which(is_cell)]
 
-# """Empty drops returns a list of potentially ambient genes and the barcodes, which belong to actual cells."""
-
-# print(ambient_genes)
-
-# print(barcodes_filtered)
+# Check output
+ambient_genes = ro.globalenv["ambient_genes"]
+barcodes_filtered = ro.globalenv["barcodes_filtered"]
+print(ambient_genes)
+print(barcodes_filtered)
 
 # """Let us create a filtered data matrix using the filtered barcodes."""
 
