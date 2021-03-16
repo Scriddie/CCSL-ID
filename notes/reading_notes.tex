@@ -1,0 +1,91 @@
+\documentclass{article}
+
+\usepackage[left=1in, right=1in, top=1in, bottom=1in]{geometry}
+\usepackage{hyperref}
+\usepackage[at]{easylist}
+\usepackage[
+    doi=false,isbn=false,url=false,
+    backend=biber,
+    uniquename=false,
+    bibencoding=utf8,
+    sorting=nty,
+    citestyle=authoryear,
+    ]{biblatex}
+    \addbibresource{bibliography.bib}
+
+\title{Reading Notes}
+\author{Alexander Reisach}
+
+\begin{document}
+    
+\maketitle
+
+\section{Plan}
+\begin{easylist}
+    \ListProperties(Style1*=\bfseries,Numbers2=l,Mark1={},Mark2={)},Indent2=1em)
+    @ Start by looking at data generation methods
+    @@ Can I find the \cite{sachs2005causal} pathways in \cite{belinky2015pathcards} and \cite{perfetto2016signor}?
+    @@ Do \cite{van2006syntren} and \cite{schaffter2011genenetweaver} produce varsortable data?
+    @ Take a look at real-world data
+    @ Implement \cite{brouillard2020differentiable}
+    @ Consider transfer learning regret
+    @ Try cycle breaking
+\end{easylist}
+
+\section{Related Literature}
+\cite{itani2010structure} provide a good recipe for learning cyclical causal structure from interventional data.
+\cite{vowels2021} give a comprehensive overview over all kinds of structure learning methods and benchmarks.
+\cite{van2006syntren} provide a good overview over other network simulations.
+
+\subsection{Datasets}
+
+I am not sure there are much better data sets than the one by \cite{sachs2005causal}.
+
+\paragraph{SynTReN}
+is a synthetic TRN data generation scheme proposed by \cite{van2006syntren}. 
+They talk about ODE simulations. Should have a look at them.
+Check out the original source networks they consider, also look for more up-to-date networks
+They seem to just do additive noise models
+Visualize and compare that to Sachs et al and another dataset from vowels2021
+
+\paragraph{GeneNetWeaver} is a synthetic TRN data generation scheme proposed by \cite{schaffter2011genenetweaver}. Their model was used in benchmarking the Dialogue for Reverse Engineering Assessments and Methods (DREAM) challenges.
+
+\paragraph{SIGNOR} is a database of established causal relationships between biological entities \cite{perfetto2016signor}.
+
+\paragraph{PathCards} unifies several sources on human biological pathways \cite{belinky2015pathcards}.
+They provide a good overview over other pathway sources.
+
+\subsection{Benchmarking}
+
+Ernest Fraenkel\footnote{\url{https://www.youtube.com/watch?v=RBPcKbEvK3U&list=PLUl4u3cNGP63uK-oWiLgO7LLJV6ZCWXac&index=17}} gives a very nice overview over \cite{marbach2012wisdom} where he explains how some funamental assumptions may be violated in real-world cell signalling data.
+He shows that unlike in in-silico data and E.coli data, for yeast co-regulated genes are basically uncorrelated and have no mutual information.
+
+Tuebingen causality pairs \url{https://webdav.tuebingen.mpg.de/cause-effect/} (only observational).
+Try varsortability in the bivariate case?
+
+\section{Conceptional Work}
+    - Leap of abstraction from PDE to causal graph
+
+\section{Methodology}
+\begin{itemize}
+    \item Only apply acyclicity constraint gradually/at a later stage?
+    \item Do not optimize over diagonal?
+    \item Use dropout (predictions/gradients)?
+    \item Combine continuous structure learning with cyclic relationships
+\end{itemize}
+
+\subsection{Transfer Learning Regret}
+Do \cite{bengio2019meta} normalize? if not, isn't maybe the variance in one direction just bigger than in the other which requires more steps? In the high-variance direction, we might see bigger losses at the start $\dots$
+How do they generate their data?
+
+In Bengio's paper, are we ultimately just talking about inverting a (mathematically) irreversible function?
+Isn't that conceptionally exactly the same as the light switch example where X inevitably causes Y but Y can also be caused by many other things?
+
+Is there something to be gained from viewing data as a sequence in the style of \cite{bengio2019meta}? Mybe try transfer learning regret on bio data?
+
+Is it maybe enough to give the conditional more params to fit than the marginal? :O
+Actually, can we just test which way the marginal changes more? The conditional will have to account for the rest of the variation...
+
+\printbibliography
+
+\end{document}

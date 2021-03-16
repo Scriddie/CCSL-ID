@@ -4,6 +4,19 @@ ccslid_env/
 scanpy_course/3k_PBMC
 *.zip
 
+# custom folders
+figures/
+.vscode/
+src/meta_transfer/
+src/Nauka/
+src/genenetweaver/
+src/gnw_official_sandbox/
+src/imputation/
+src/experiments/
+
+# Custom formats
+*.csv
+
 # latex
 *.out
 *.aux
