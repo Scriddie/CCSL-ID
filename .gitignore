@@ -7,7 +7,6 @@ scanpy_course/3k_PBMC
 # custom folders
 figures/
 .vscode/
-src/meta_transfer/
 src/Nauka/
 src/genenetweaver/
 src/gnw_official_sandbox/
