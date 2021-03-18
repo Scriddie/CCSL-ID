@@ -74,19 +74,41 @@ def viz_learning_curve(frames, polarity=''):
     plt.savefig(f'{opt.FIGPATH}/{polarity}_lc.png')
     plt.close()
 
+def viz_marginal(model, dgp, polarity=''):
+    """ show marginal distribution """
+    n = 1000
+    x = torch.FloatTensor(n).uniform_(-4, 4).view(-1, 1)
+    orig = dgp(n).view(-1).numpy()
+    
+    # x = normal(torch.tensor(np.random.randint(-4, 4, n)), 2, n)
+    pi, mu, sigma = model(x)
+    mixture = torch.distributions.Normal(loc=mu, scale=sigma)
+    pred_vals = mixture.sample().numpy()
+    pi_np = pi.numpy()
+    pi_np = pi_np / np.sum(pi_np, axis=1, keepdims=True)
+    pred = [np.random.choice(pred_vals[i, :], p=pi_np[i, :]) 
+            for i in range(len(pred_vals))]
+
+    sns.kdeplot(x=orig, label='original')
+    sns.kdeplot(x=pred, label='predicted')
+    plt.legend()
+    plt.title(polarity)
+    plt.savefig(f'{opt.FIGPATH}/{polarity}_marginal')
+    plt.close()
+
 def viz_gen(model, polarity='', actual=None):
     """ show generative distributions before transfer """
     n = 1000
     x = normal(torch.tensor(np.random.randint(-4, 4, n)), 2, n)
     with torch.no_grad():
-        pi, mu, sigma = model(torch.FloatTensor(n).uniform_(-4, 4).view(-1, 1))
+        pi, mu, sigma = model(x)
     mixture = torch.distributions.Normal(loc=mu, scale=sigma)
     pred = torch.sum(mixture.sample() * pi, axis=1)
     plt.scatter(x.numpy(), pred.numpy(), s=.2)
     if actual is not None:
         plt.scatter(x.numpy(), actual(n), s=.2)
     plt.title(polarity)
-    plt.savefig(f'{opt.FIGPATH}/{polarity}_gen.png')
+    plt.savefig(f'{opt.FIGPATH}/{polarity}_cond.png')
     plt.close()
 
 def viz_gen_separate(model, polarity=''):
@@ -105,7 +127,7 @@ def viz_gen_separate(model, polarity=''):
         plt.scatter(samples, values[:, i], s=.2, label=str(i))
     plt.legend(markerscale=5)
     plt.title(polarity)
-    plt.savefig(f'{opt.FIGPATH}/{polarity}_gen_sep.png')
+    plt.savefig(f'{opt.FIGPATH}/{polarity}_cond_sep.png')
     plt.close()
 
 def train_nll(opt, model, scm, train_distr_fn, polarity='X2Y', 
@@ -143,30 +165,30 @@ def train_transfer(opt, model, scm,  polarity):
     if polarity == 'x2y':
         X_eval = opt.TRANS_DISTR(opt.N_EVAL)
         with torch.no_grad():
-            eval_Y = scm(X_eval)
+            Y_eval = scm(X_eval)
     elif polarity == 'y2x':
-        eval_Y = opt.TRANS_DISTR(opt.N_EVAL)
+        Y_eval = opt.TRANS_DISTR(opt.N_EVAL)
         with torch.no_grad():
-            X_eval = scm(eval_Y)
+            X_eval = scm(Y_eval)
     else:
         raise ValueError('No such polarity')
     
     marginal = gmm(opt)
     marginal.fit(X_eval)
-    loss_marginal = nll(marginal(X_eval), X_eval)
-    with torch.no_grad():
-        viz_gen(marginal, polarity=f'{polarity}_marginal', actual=opt.TRANS_DISTR)
+    viz_marginal(marginal, opt.TRANS_DISTR, polarity=f'{polarity}')
+    nll_marginal = nll(marginal(X_eval), X_eval)
 
     # online SGD and eval
     optim = torch.optim.Adam(model.parameters(), lr=opt.LR)
     frames = []
     for i in range(opt.TRANS_ITER):
+        samples = 100
         if polarity == 'x2y':
-            x = opt.TRANS_DISTR(1)
+            x = opt.TRANS_DISTR(samples)
             with torch.no_grad():
                 y = scm(x)
         else:
-            y = opt.TRANS_DISTR(1)
+            y = opt.TRANS_DISTR(samples)
             with torch.no_grad():
                 x = scm(y)
         prd = model(x)
@@ -177,16 +199,16 @@ def train_transfer(opt, model, scm,  polarity):
 
         # eval
         with torch.no_grad():
-            nll_marg = nll(marginal(X_eval), X_eval)
-            nll_cond = nll(model(X_eval), X_eval)
+            nll_cond = nll(model(X_eval), Y_eval)
             frames.append(Namespace(iter_num=i,
-                loss=nll_marg.item() + nll_cond.item()))
+                loss=nll_marginal.item() + nll_cond.item()))
     return frames
 
 def viz_transfer(df):
     """ Compare transfer regret for competing models """
     sns.lineplot(data=df, x='iter', y='x2y', label='x2y')
     sns.lineplot(data=df, x='iter', y='y2x', label='y2x')
+    plt.ylabel('nll')
     plt.savefig(f'{opt.FIGPATH}/transfer.png')
     plt.close()
 
@@ -209,12 +231,6 @@ def viz_dgp(scm):
     plt.savefig(f'{opt.FIGPATH}/data_x2y.png')
     plt.close()
 
-def viz_marginal(generated, sample, polarity):
-    sns.kdeplot(x=generated, label='generated')
-    sns.kdeplot(x=sample, label='sample')
-    plt.savefig(f'{opt.FIGPATH}/{polarity}_marginal')
-    plt.close()
-
 def normal(mean, std, N): 
     return torch.normal(torch.ones(N).mul_(mean),
                         torch.ones(N).mul_(std)).view(-1, 1)
@@ -229,20 +245,20 @@ if __name__ == "__main__":
     # Training
     opt.LR = 0.02
     opt.ITER = 500
-    opt.REC_FREQ = 10lula
+    opt.REC_FREQ = 10
     opt.SAMPLES = 1000
     opt.N_EVAL = int(1e4)
     # Meta
-    opt.TRANS_ITER = 30
-    opt.N_EXP = 5
+    opt.TRANS_ITER = 200
+    opt.N_EXP = 50
     # Sampling 
     opt.TRAIN_DISTR = lambda n: normal(0, 2, n)
     opt.TRANS_DISTR = lambda n: normal(
         torch.tensor(np.random.randint(-4, 4, n)), 2, n)
-    opt.FIGPATH = 'src/meta_transfer/figures'
+    opt.FIGPATH = 'src/transfer/figures'
 
     # Data Generation
-    scm = RandomSplineSCM(False, True, 8, 10, 3, range_scale=1.)
+    scm = RandomSplineSCM(False, True, 8, 8, 3, range_scale=1.)
     viz_dgp(scm)
     
     # causal conditional
@@ -275,5 +291,3 @@ if __name__ == "__main__":
         res['iter'] += [frame.iter_num for frame in y2x_frames]
     viz_transfer(pd.DataFrame(res))
 
-
-    # TODO y da heck are gen plots so nonsensical?
