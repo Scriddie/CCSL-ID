@@ -76,11 +76,10 @@ def viz_learning_curve(frames, polarity=''):
 
 def viz_marginal(model, dgp, polarity=''):
     """ show marginal distribution """
-    n = 1000
-    x = torch.FloatTensor(n).uniform_(-4, 4).view(-1, 1)
+    n = int(1e5)
+    x = torch.FloatTensor(n).uniform_(-opt.SPAN, opt.SPAN).view(-1, 1)
     orig = dgp(n).view(-1).numpy()
-    
-    # x = normal(torch.tensor(np.random.randint(-4, 4, n)), 2, n)
+
     pi, mu, sigma = model(x)
     mixture = torch.distributions.Normal(loc=mu, scale=sigma)
     pred_vals = mixture.sample().numpy()
@@ -96,32 +95,42 @@ def viz_marginal(model, dgp, polarity=''):
     plt.savefig(f'{opt.FIGPATH}/{polarity}_marginal')
     plt.close()
 
-def viz_gen(model, polarity='', actual=None):
+def viz_cond(model, polarity, actual=None):
     """ show generative distributions before transfer """
+    # TODO shows wrong direction for anticausal?
     n = 1000
-    x = normal(torch.tensor(np.random.randint(-4, 4, n)), 2, n)
+    inp = normal(torch.tensor(np.random.randint(-10, 10, n)), 2, n)
     with torch.no_grad():
-        pi, mu, sigma = model(x)
+        pi, mu, sigma = model(inp)
     mixture = torch.distributions.Normal(loc=mu, scale=sigma)
-    pred = torch.sum(mixture.sample() * pi, axis=1)
-    plt.scatter(x.numpy(), pred.numpy(), s=.2)
-    if actual is not None:
-        plt.scatter(x.numpy(), actual(n), s=.2)
+
+    pred_vals = mixture.sample().numpy()
+    pi_np = pi.numpy()
+    pi_np = pi_np / np.sum(pi_np, axis=1, keepdims=True)
+    pred = [np.random.choice(pred_vals[i, :], p=pi_np[i, :]) 
+            for i in range(len(pred_vals))]
+
+    plt.scatter(inp.numpy(), pred, s=.2)
     plt.title(polarity)
+    plt.xlabel('input')
+    plt.ylabel('prediction')
+    plt.xlim((-10, 10))
+    plt.ylim((-10, 10))
     plt.savefig(f'{opt.FIGPATH}/{polarity}_cond.png')
     plt.close()
 
-def viz_gen_separate(model, polarity=''):
+def viz_cond_separate(model, polarity=''):
+    # TODO prolly still wrong?
     """ show generative distributions before transfer """
     n = 1000
     samples, values = np.zeros(1000), np.zeros((1000, 10))
     for i in range(n):
-        x = normal(np.random.randint(-4, 4), 2, 1)
+        inp = normal(np.random.randint(-10, 10), 2, 1)
         with torch.no_grad():
-            pi, mu, sigma = model(x)
+            pi, mu, sigma = model(inp)
         mixture = torch.distributions.Normal(loc=mu, scale=sigma)
         pred = mixture.sample().squeeze()  # pi.squeeze() * 
-        samples[i] = x.item()
+        samples[i] = inp.item()
         values[i, :] = pred.numpy()
     for i in range(values.shape[1]):
         plt.scatter(samples, values[:, i], s=.2, label=str(i))
@@ -130,21 +139,25 @@ def viz_gen_separate(model, polarity=''):
     plt.savefig(f'{opt.FIGPATH}/{polarity}_cond_sep.png')
     plt.close()
 
-def train_nll(opt, model, scm, train_distr_fn, polarity='X2Y', 
-    loss_fn=nn.MSELoss(), decoder=None, encoder=None):
+def polarity_hlp(polarity, X, Y):
+    if polarity == 'x2y':
+        inp, tar = X, Y
+    elif polarity == 'y2x':
+        inp, tar = Y, X
+    else:
+        raise ValueError
+    return inp, tar
+
+def train_nll(opt, model, scm, train_distr_fn, polarity, 
+    loss_fn):
     optim = torch.optim.Adam(model.parameters(), lr=opt.LR)
     frames = []
-    for iter_num in tqdm(range(opt.ITER)):
+    for iter_num in range(opt.ITER):
         # Generate samples from the training distry
         X = train_distr_fn(opt.SAMPLES)
         with torch.no_grad():
             Y = scm(X)
-        if polarity == 'X2Y':
-            inp, tar = X, Y
-        elif polarity == 'Y2X':
-            inp, tar = Y, X
-        else:
-            raise ValueError
+        inp, tar = polarity_hlp(polarity, X, Y)
         # Train
         out = model(inp)
         loss = loss_fn(out, tar)
@@ -156,6 +169,40 @@ def train_nll(opt, model, scm, train_distr_fn, polarity='X2Y',
             info = Namespace(loss=loss.item(),
                              iter_num=iter_num)
             frames.append(info)
+
+    # Eval sample
+    X_eval = train_distr_fn(opt.SAMPLES*10)
+    with torch.no_grad():
+        Y_eval = scm(X_eval)
+    
+    # print model marginal and conditional
+    marginal = gmm(opt)
+    inp, tar = polarity_hlp(polarity, X_eval, Y_eval)
+    marginal.fit(X_eval)
+    nll_marg = nll(marginal(X_eval), X_eval).item()
+    nll_cond = loss.item()
+    print(f'{polarity.upper()}\t NLL conditional: {nll_cond}\t NLL marginal: {nll_marg}')
+    
+    # # print model joint
+    # # TODO maybe I've been doing the joint wrong?
+    # # Predict joint log likelihood!
+    # pi, mu, sigma = marginal(X_eval)
+    # mixture = torch.distributions.Normal(loc=mu, scale=sigma)
+    # pred_vals = mixture.sample().numpy()
+    # pi_np = pi.numpy()
+    # pi_np = pi_np / np.sum(pi_np, axis=1, keepdims=True)
+    # pred = [np.random.choice(pred_vals[i, :], p=pi_np[i, :]) 
+    #         for i in range(len(pred_vals))]
+    # # now to get the corresponding conditionals!
+    # pi_cond, mu_cond, sigma_cond = model(X_eval)
+    # cond_mix = torch.distributions.Normal(loc=mu_cond, scale=sigma_cond)
+    # pred_cond_vals = cond_mix.sample().numpy()
+    # pi_cond_np = pi_cond.numpy()
+    # pi_cond_np = pi_cond_np / np.sum(pi_cond_np, axis=1, keepdims=True)
+    # pred_cond = [np.random.choice(pred_cond_vals[i, :], p=pi_cond_np[i, :]) 
+    #         for i in range(len(pred_cond_vals))]
+    # # TODO how to sample appropriately from both??
+
     return frames
 
 def train_transfer(opt, model, scm,  polarity):
@@ -175,7 +222,6 @@ def train_transfer(opt, model, scm,  polarity):
     
     marginal = gmm(opt)
     marginal.fit(X_eval)
-    viz_marginal(marginal, opt.TRANS_DISTR, polarity=f'{polarity}')
     nll_marginal = nll(marginal(X_eval), X_eval)
 
     # online SGD and eval
@@ -202,33 +248,39 @@ def train_transfer(opt, model, scm,  polarity):
             nll_cond = nll(model(X_eval), Y_eval)
             frames.append(Namespace(iter_num=i,
                 loss=nll_marginal.item() + nll_cond.item()))
-    return frames
+    return frames, marginal
 
 def viz_transfer(df):
     """ Compare transfer regret for competing models """
     sns.lineplot(data=df, x='iter', y='x2y', label='x2y')
     sns.lineplot(data=df, x='iter', y='y2x', label='y2x')
+    plt.title('Transfer Learning Adaptation')
     plt.ylabel('nll')
     plt.savefig(f'{opt.FIGPATH}/transfer.png')
     plt.close()
 
-def viz_dgp(scm):
+def viz_dgp(scm, polarity):
     """ Visualize data-generating process """
     plt.figure(figsize=(9, 5))
     ax = plt.subplot(1, 1, 1)
-    mus = [-4., 4., 0]
+    mus = [-opt.SPAN, opt.SPAN, 0]
     colors = ['C3', 'C2', 'C0']
     labels = [r'Transfer ($\mu = -4$)', r'Transfer ($\mu = +4$)', 'Training']
 
     for mu, color, label in zip(mus, colors, labels):
         X = mu + 2 * torch.randn((1000, 1))
-        ax.scatter(X.squeeze(1).numpy(), scm(X).squeeze(1).numpy(),             color=color, marker='+', alpha=0.3, label=label)
+        kwargs = {'color': color, 'marker': '+', 'alpha': 0.3, 'label': label}
+        if polarity == 'x2y':
+            ax.scatter(X.squeeze(1).numpy(), scm(X).squeeze(1).numpy(), **kwargs)
+        else:
+            ax.scatter(scm(X).squeeze(1).numpy(), X.squeeze(1).numpy(),
+            **kwargs)
 
     ax.tick_params(axis='both', which='major', labelsize=13)
     ax.legend(loc=4, prop={'size': 13})
-    ax.set_xlabel('A', fontsize=14)
-    ax.set_ylabel('B', fontsize=14)
-    plt.savefig(f'{opt.FIGPATH}/data_x2y.png')
+    ax.set_xlabel(polarity[0].upper(), fontsize=14)
+    ax.set_ylabel(polarity[-1].upper(), fontsize=14)
+    plt.savefig(f'{opt.FIGPATH}/{polarity}_data.png')
     plt.close()
 
 def normal(mean, std, N): 
@@ -249,33 +301,17 @@ if __name__ == "__main__":
     opt.SAMPLES = 1000
     opt.N_EVAL = int(1e4)
     # Meta
-    opt.TRANS_ITER = 200
-    opt.N_EXP = 50
+    opt.TRANS_ITER = 300
+    opt.N_EXP = 5
     # Sampling 
+    opt.SPAN = 4
     opt.TRAIN_DISTR = lambda n: normal(0, 2, n)
     opt.TRANS_DISTR = lambda n: normal(
-        torch.tensor(np.random.randint(-4, 4, n)), 2, n)
+        torch.tensor(np.random.randint(-opt.SPAN, opt.SPAN)), 2, n)
     opt.FIGPATH = 'src/transfer/figures'
 
     # Data Generation
-    scm = RandomSplineSCM(False, True, 8, 8, 3, range_scale=1.)
-    viz_dgp(scm)
-    
-    # causal conditional
-    model_x2y = mdn(opt)
-    frames_x2y = train_nll(opt, model_x2y, scm, opt.TRAIN_DISTR,
-        polarity='X2Y', loss_fn=nll, decoder=None, encoder=None)
-    viz_learning_curve(frames_x2y, polarity='x2y')
-    viz_gen_separate(model_x2y, polarity='x2y')
-    viz_gen(model_x2y, polarity='x2y')
-
-    # anti-causal conditional
-    model_y2x = mdn(opt)
-    frames_y2x = train_nll(opt, model_y2x, scm, opt.TRAIN_DISTR,
-        polarity='Y2X', loss_fn=nll, decoder=None, encoder=None)
-    viz_learning_curve(frames_y2x, polarity='y2x')
-    viz_gen_separate(model_y2x, polarity='y2x')
-    viz_gen(model_y2x, polarity='y2x')
+    # scm = RandomSplineSCM(False, True, 8, 8, 3, range_scale=1.)
 
     # Transfer training and regret comparison for both models
     res = {
@@ -284,10 +320,71 @@ if __name__ == "__main__":
         'iter': [],
     }
     for i in tqdm(range(opt.N_EXP)):
-        x2y_frames = train_transfer(opt, model_x2y, scm, 'x2y')
-        y2x_frames = train_transfer(opt, model_y2x, scm, 'y2x')
+        # TODO why are NLL conditionals the way they are?? :O
+
+        ## TODO think about what input and output noise should mean!
+        ## Counterexample
+        # scm = RandomSplineSCM(
+        #     input_noise=False, 
+        #     output_noise=False, 
+        #     span=opt.SPAN*1.5/4, 
+        #     num_anchors=2, 
+        #     order=1, 
+        #     range_scale=1.
+        # )
+        # viz_dgp(scm, 'x2y')
+        # viz_dgp(scm, 'y2x')
+        # Original
+        scm = RandomSplineSCM(
+            input_noise=False, 
+            output_noise=True, 
+            span=opt.SPAN*2, 
+            num_anchors=8, 
+            order=3, 
+            range_scale=1.
+        )
+        viz_dgp(scm, 'x2y')
+        viz_dgp(scm, 'y2x')
+
+        # causal conditional
+        model_x2y = mdn(opt)
+        frames_x2y = train_nll(opt, model_x2y, scm, opt.TRAIN_DISTR,
+            polarity='x2y', loss_fn=nll)
+        # anti-causal conditional
+        model_y2x = mdn(opt)
+        frames_y2x = train_nll(opt, model_y2x, scm, opt.TRAIN_DISTR,
+            polarity='y2x', loss_fn=nll)
+        # transfer
+        x2y_frames, x2y_marginal = train_transfer(opt, model_x2y, scm, 'x2y')
+        y2x_frames, y2x_marginal = train_transfer(opt, model_y2x, scm, 'y2x')
         res['x2y'] += [frame.loss for frame in x2y_frames]
         res['y2x'] += [frame.loss for frame in y2x_frames]
         res['iter'] += [frame.iter_num for frame in y2x_frames]
+
+    # viz some conditionals
+    viz_learning_curve(frames_x2y, polarity='x2y')
+    viz_cond_separate(model_x2y, polarity='x2y')
+    viz_cond(model_x2y, polarity='x2y')
+    viz_learning_curve(frames_y2x, polarity='y2x')
+    viz_cond_separate(model_y2x, polarity='y2x')
+    viz_cond(model_y2x, polarity='y2x')
+
+    # viz some marginals
+    viz_marginal(x2y_marginal, opt.TRAIN_DISTR, polarity=f'x2y')
+    viz_marginal(y2x_marginal, lambda x: scm(opt.TRAIN_DISTR(x)), polarity=f'y2x')
+
+    # viz transfer learning
     viz_transfer(pd.DataFrame(res))
 
+# TODO nll_cond seems is really sensitive to initialization? or idk...
+# TODO maybe the idea works if nll conditionals are same at beginning?
+# for 8 anchors like in their setting, NLL Y2X tends to be a lot lower...
+# think another time why marginal looks so garbage. maybe feeding in stuff evenly spaced isn't fair?
+
+# TODO we should do xlim ylim on plots to show it actually learns reasonable stuff!
+
+### Current theory:
+# Whichever model has the higher nll, that's the model the meta-learner will move towards?
+# Alternatively, maybe meta learning will work once we have output noise??
+# We do have a lot of random fluctuations either way...
+# With output noise, the conditional loss of y2x seems to be a lot lower. Not anymore without output noise?

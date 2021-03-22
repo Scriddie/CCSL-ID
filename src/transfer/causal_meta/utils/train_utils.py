@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from causal_meta.utils.torch_utils import logsumexp
-from tqdm import tqdm
+from tqdm import tqdm, tnrange
 from argparse import Namespace
 from copy import deepcopy
 
