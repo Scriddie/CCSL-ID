@@ -11,7 +11,7 @@ src/Nauka/
 src/genenetweaver/
 src/gnw_official_sandbox/
 src/imputation/
-src/experiments/
+experiments/
 
 # Custom formats
 *.csv
