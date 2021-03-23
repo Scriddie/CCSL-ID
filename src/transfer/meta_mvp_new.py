@@ -148,6 +148,11 @@ def viz_cond_separate(model, polarity='', name=''):
     plt.close()
 
 def polarity_hlp(polarity, X, Y):
+
+    if opt.NOISE_X:
+        N = len(X)
+        X = X + torch.normal(torch.zeros(N), torch.ones(N)).view(-1, 1)
+
     if polarity == 'x2y':
         inp, tar = X, Y
     elif polarity == 'y2x':
@@ -161,10 +166,11 @@ def train_nll(opt, model, scm, train_distr_fn, polarity,
     optim = torch.optim.Adam(model.parameters(), lr=opt.LR)
     frames = []
     for iter_num in range(opt.ITER):
-        # Generate samples from the training distry
+        # Generate samples from the train distr
         X = train_distr_fn(opt.SAMPLES)
         with torch.no_grad():
             Y = scm(X)
+
         inp, tar = polarity_hlp(polarity, X, Y)
         # Train
         out = model(inp)
@@ -283,12 +289,13 @@ if __name__ == "__main__":
     opt = Namespace()
     opt.N_VIZ = 1e3
     # DGP
-    opt.INPUT_NOISE = True
-    opt.OUTPUT_NOISE = True
+    opt.NOISE_X = False
+    opt.INPUT_NOISE = False
+    opt.OUTPUT_NOISE = False
     opt.SPAN = 4
     opt.ANCHORS = 2
-    opt.ORDER =1
-    opt.SCALE =1.
+    opt.ORDER = 1
+    opt.SCALE = 1.
     # Model
     opt.CAPACITY = 32
     opt.NUM_COMPONENTS = 10
