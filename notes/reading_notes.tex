@@ -93,6 +93,28 @@ Actually, can we just test which way the marginal changes more? The conditional 
 
 Is there a way to break causality by including the wrong things? Not just by treating them in the wrong way, but by including them in the question at all!
 
+\subsection{Experiments}
+\paragraph{Current theory}
+Whichever model has the higher nll, that's the model the meta-learner will move towards?
+Alternatively, maybe meta learning will work once we have output noise??
+We do have a lot of random fluctuations either way...
+With output noise, the conditional loss of y2x seems to be a lot lower. Not anymore without output noise?
+\begin{itemize}
+    \item TODO am I doing the evaluation right? I never retrain the gmm...
+    \item TODO what's a sufficiently large eval data set?
+    \item When I take n different randints to sample from in trans distr, convergence 
+    \item seems better... (Which I guess makes sense)
+    \item output noise makes training a lot more stable
+    \item TODO be very careful about not overtraining and divergence! some early 
+    \item stopping might make sense!
+    \item TODO maybe there is catastrophic forgetting in only one direction???
+    \item say, if in one direction it would be easier to re-fit the already fitted 
+    \item components / refitting would require some lasting change!
+    \item TODO so what role exactly does the noise play again? is it really necessary?
+    \item TODO stitch together plots to overview plots in code already?
+    \item TODO investigate the impact of changing range on contitional vs. marginal complexity...
+\end{itemize}
+
 \printbibliography
 
 \end{document}

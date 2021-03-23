@@ -83,11 +83,12 @@ def viz_learning_curve(frames, polarity=''):
 
 def viz_marginal(model, dgp, polarity=''):
     """ show marginal distribution """
-    n = int(1e5)
-    x = torch.FloatTensor(n).uniform_(-opt.SPAN, opt.SPAN).view(-1, 1)
-    orig = dgp(n).view(-1).numpy()
+    n = int(opt.N_VIZ)
+    # inp = torch.FloatTensor(opt.N_EVAL).uniform_(-10, 10).view(-1, 1)
+    inp = normal(torch.tensor(np.random.randint(-10, 10, n)), 2, n)
+    orig = dgp(opt.N_EVAL).view(-1).numpy()
 
-    pi, mu, sigma = model(x)
+    pi, mu, sigma = model(inp)
     mixture = torch.distributions.Normal(loc=mu, scale=sigma)
     pred_vals = mixture.sample().numpy()
     pi_np = pi.numpy()
@@ -104,9 +105,10 @@ def viz_marginal(model, dgp, polarity=''):
 
 def viz_cond(model, polarity, actual=None, name=''):
     """ show generative distributions before transfer """
-    # TODO shows wrong direction for anticausal?
-    n = 1000
+    n = int(opt.N_VIZ)
+    # inp = torch.FloatTensor(opt.N_EVAL).uniform_(-10, 10).view(-1, 1)
     inp = normal(torch.tensor(np.random.randint(-10, 10, n)), 2, n)
+
     with torch.no_grad():
         pi, mu, sigma = model(inp)
     mixture = torch.distributions.Normal(loc=mu, scale=sigma)
@@ -127,22 +129,17 @@ def viz_cond(model, polarity, actual=None, name=''):
     plt.savefig(f'{opt.FIGPATH}/{name}{polarity}_cond.png')
     plt.close()
 
-# TODO not workable yet
 def viz_cond_separate(model, polarity='', name=''):
-    # TODO prolly still wrong?
     """ show generative distributions before transfer """
-    n = 1000
-    samples, values = np.zeros(1000), np.zeros((1000, 10))
-    for i in range(n):
-        inp = normal(np.random.randint(-10, 10), 2, 1)
-        with torch.no_grad():
-            pi, mu, sigma = model(inp)
-        mixture = torch.distributions.Normal(loc=mu, scale=sigma)
-        pred = mixture.sample().squeeze()  # pi.squeeze() * 
-        samples[i] = inp.item()
-        values[i, :] = pred.numpy()
-    for i in range(values.shape[1]):
-        plt.scatter(samples, values[:, i], s=.2, label=str(i))
+    n = int(opt.N_VIZ)
+    # inp = torch.FloatTensor(opt.N_EVAL).uniform_(-10, 10).view(-1, 1)
+    inp = normal(torch.tensor(np.random.randint(-10, 10, n)), 2, n)
+    with torch.no_grad():
+        pi, mu, sigma = model(inp)
+    # TODO use pi for alpha!
+    # alpha=pi[:, i]
+    for i in range(mu.shape[1]):
+        plt.scatter(inp, mu[:, i], s=.1, alpha=.1, label=str(i))
     plt.xlim((-10, 10))
     plt.ylim((-10, 10))
     plt.legend(markerscale=5)
@@ -303,6 +300,7 @@ def snap(opt):
 
 if __name__ == "__main__":
     opt = Namespace()
+    opt.N_VIZ = 1e3
     # DGP
     opt.INPUT_NOISE = False
     opt.OUTPUT_NOISE = True
@@ -366,6 +364,7 @@ if __name__ == "__main__":
             viz_cond(model_x2y, polarity='x2y', name='TRAIN_')
             viz_learning_curve(frames_y2x, polarity='y2x')
             viz_cond_separate(model_y2x, polarity='y2x', name='TRAIN_')
+            viz_cond(model_y2x, polarity='y2x', name='TRAIN_')
         # transfer
         x2y_frames, x2y_marginal = train_transfer(opt, model_x2y, scm, 'x2y')
         y2x_frames, y2x_marginal = train_transfer(opt, model_y2x, scm, 'y2x')
@@ -373,9 +372,10 @@ if __name__ == "__main__":
         res['y2x'] += [frame.loss for frame in y2x_frames]
         res['iter'] += [frame.iter_num for frame in y2x_frames]
         if i == opt.N_EXP-1:
-            viz_cond(model_y2x, polarity='y2x', name='TRAIN_')
             viz_cond(model_x2y, polarity='x2y', name='TRANS_')
             viz_cond(model_y2x, polarity='y2x', name='TRANS_')
+            viz_cond_separate(model_x2y, polarity='x2y', name='TRANS_')
+            viz_cond_separate(model_y2x, polarity='y2x', name='TRANS_')
 
     # viz some marginals
     viz_marginal(x2y_marginal, opt.TRAIN_DISTR, polarity=f'x2y')
@@ -402,3 +402,7 @@ if __name__ == "__main__":
 
 # TODO maybe there is catastrophic forgetting in only one direction???
 # say, if in one direction it would be easier to re-fit the already fitted components / refitting would require some lasting change!
+
+# TODO so what role exactly does the noise play again? is it really necessary??
+
+# TODO Which sampling is fair, the uniform or the normal one???

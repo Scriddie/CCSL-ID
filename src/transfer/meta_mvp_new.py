@@ -4,6 +4,7 @@ import numpy as np
 import scipy
 from scipy import interpolate
 import matplotlib.pyplot as plt 
+from matplotlib import colors
 import torch
 import numpy as np
 import seaborn as sns
@@ -84,9 +85,8 @@ def viz_learning_curve(frames, polarity=''):
 def viz_marginal(model, dgp, polarity=''):
     """ show marginal distribution """
     n = int(opt.N_VIZ)
-    # inp = torch.FloatTensor(opt.N_EVAL).uniform_(-10, 10).view(-1, 1)
-    inp = normal(torch.tensor(np.random.randint(-10, 10, n)), 2, n)
-    orig = dgp(opt.N_EVAL).view(-1).numpy()
+    inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
+    orig = dgp(n).view(-1).numpy()
 
     pi, mu, sigma = model(inp)
     mixture = torch.distributions.Normal(loc=mu, scale=sigma)
@@ -106,8 +106,7 @@ def viz_marginal(model, dgp, polarity=''):
 def viz_cond(model, polarity, actual=None, name=''):
     """ show generative distributions before transfer """
     n = int(opt.N_VIZ)
-    # inp = torch.FloatTensor(opt.N_EVAL).uniform_(-10, 10).view(-1, 1)
-    inp = normal(torch.tensor(np.random.randint(-10, 10, n)), 2, n)
+    inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
 
     with torch.no_grad():
         pi, mu, sigma = model(inp)
@@ -132,14 +131,15 @@ def viz_cond(model, polarity, actual=None, name=''):
 def viz_cond_separate(model, polarity='', name=''):
     """ show generative distributions before transfer """
     n = int(opt.N_VIZ)
-    # inp = torch.FloatTensor(opt.N_EVAL).uniform_(-10, 10).view(-1, 1)
-    inp = normal(torch.tensor(np.random.randint(-10, 10, n)), 2, n)
+    inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
     with torch.no_grad():
         pi, mu, sigma = model(inp)
-    # TODO use pi for alpha!
-    # alpha=pi[:, i]
+
     for i in range(mu.shape[1]):
-        plt.scatter(inp, mu[:, i], s=.1, alpha=.1, label=str(i))
+        rgba_colors = np.zeros((len(inp), 4))
+        rgba_colors[:, 0:3] = colors.to_rgb('C'+str(i))
+        rgba_colors[:, 3] = pi[:, i]
+        plt.scatter(inp, mu[:, i], color=rgba_colors, s=.3, label=str(i))
     plt.xlim((-10, 10))
     plt.ylim((-10, 10))
     plt.legend(markerscale=5)
@@ -192,25 +192,6 @@ def train_nll(opt, model, scm, train_distr_fn, polarity,
         nll_cond = loss_fn(model(inp), tar).item()
     print(f'{polarity.upper()}\t NLL conditional: {nll_cond}\t NLL marginal: {nll_marg}\t NLL TOTAL: {nll_cond+nll_marg}')
     
-    # # Predict joint log likelihood!
-    # # this uniform -> marginal seems to give us the same distribution as dgp!
-    # unif = torch.FloatTensor(100000).uniform_(-opt.SPAN, opt.SPAN).view(-1, 1)
-    # pi, mu, sigma = marginal(unif)
-    # mixture = torch.distributions.Normal(loc=mu, scale=sigma)
-    # with torch.no_grad():
-    #     pred_vals = mixture.sample().numpy()
-    # pi_np = pi.numpy()
-    # pi_np = pi_np / np.sum(pi_np, axis=1, keepdims=True)
-    # pred = [np.random.choice(pred_vals[i, :], p=pi_np[i, :]) 
-    #         for i in range(len(pred_vals))]
-
-    # # just plot some stuff to make sure things look good
-    # sns.kdeplot(inp.view(-1,).numpy())
-    # sns.kdeplot(pred)
-    # plt.title(polarity)
-    # plt.show()
-
-    # TODO looks really good in terms of loss now. Get this into transfer learning!
     return frames
 
 def train_transfer(opt, model, scm,  polarity):
@@ -227,7 +208,7 @@ def train_transfer(opt, model, scm,  polarity):
     marginal.fit(X_eval)
     nll_marginal = nll(marginal(X_eval), X_eval)
 
-    # online SGD and eval
+    # online grad desc and eval
     optim = torch.optim.Adam(model.parameters(), lr=opt.TRANS_LR)
     frames = []
     for i in tqdm(range(opt.TRANS_ITER)):
@@ -302,7 +283,7 @@ if __name__ == "__main__":
     opt = Namespace()
     opt.N_VIZ = 1e3
     # DGP
-    opt.INPUT_NOISE = False
+    opt.INPUT_NOISE = True
     opt.OUTPUT_NOISE = True
     opt.SPAN = 4
     opt.ANCHORS = 2
@@ -321,14 +302,14 @@ if __name__ == "__main__":
     # Sampling 
     opt.TRAIN_DISTR = lambda n: normal(0, 2, n)
     opt.SWEEP = lambda n: torch.tensor(
-        np.random.randint(4, 5, n))
+        np.random.randint(-opt.SPAN, opt.SPAN, n))
     opt.TRANS_DISTR = lambda i, n: normal(i, 2, n)
     # Meta
     opt.TRANS_LR = 0.01  # they transfer with a higher learning rate?
     opt.TRANS_ITER = 200
     opt.FINETUNE_NUM_ITER = 1
     opt.TRANS_SAMPLES = opt.SAMPLES  # is same in theirs
-    opt.N_EXP = 1
+    opt.N_EXP = 3
 
     snap(opt)
 
@@ -383,26 +364,3 @@ if __name__ == "__main__":
 
     # viz transfer learning
     viz_transfer(pd.DataFrame(res))
-
-# TODO we should do xlim ylim on plots to show it actually learns reasonable stuff!
-
-### Current theory:
-# Whichever model has the higher nll, that's the model the meta-learner will move towards?
-# Alternatively, maybe meta learning will work once we have output noise??
-# We do have a lot of random fluctuations either way...
-# With output noise, the conditional loss of y2x seems to be a lot lower. Not anymore without output noise?
-
-# TODO am I doing the evaluation right? I never retrain the gmm...
-# TODO what's a sufficiently large eval data set?
-
-# When I take n different randints to sample from in trans distr, convergence seems better... (Which I guess makes sense)
-
-# output noise makes training a lot more stable
-# TODO be very careful about not overtraining and divergence! some early stopping might make sense!
-
-# TODO maybe there is catastrophic forgetting in only one direction???
-# say, if in one direction it would be easier to re-fit the already fitted components / refitting would require some lasting change!
-
-# TODO so what role exactly does the noise play again? is it really necessary??
-
-# TODO Which sampling is fair, the uniform or the normal one???
