@@ -240,19 +240,19 @@ def train_transfer(opt, model, scm,  polarity):
     optim = torch.optim.Adam(model.parameters(), lr=opt.TRANS_LR)
     frames = []
     res = {'loss': [], 'iter': [],}
-    for i in tqdm(range(opt.TRANS_ITER)):
+    for i in tqdm(range(opt.TRANS_TASKS)):
         x = opt.TRANS_DISTR(opt.SWEEP(1), opt.TRANS_SAMPLES)
         with torch.no_grad():
             y = scm(x)
         x, y = polarity_hlp(polarity, x, y)
 
-        for j in range(opt.FINETUNE_NUM_ITER):
+        for j in range(opt.TRANS_ITER):
             loss_cond = nll(model(x), y)
             optim.zero_grad()
             loss_cond.backward()
             optim.step()
-            res['loss'].append(loss.detach().item())
-            res['iter'].append(i)
+            res['loss'].append(loss_cond.detach().item())
+            res['iter'].append(j)
         # eval
         with torch.no_grad():
             nll_cond_eval = nll(model(X_eval), Y_eval)
@@ -262,10 +262,10 @@ def train_transfer(opt, model, scm,  polarity):
     print(f'TRANS {polarity.upper()}\t NLL conditional: {nll_cond_eval}\t NLL marginal: {nll_marg_eval}\t NLL TOTAL: {nll_cond_eval+nll_marg_eval}')
     return frames, marginal, res
 
-def viz_transfer(df):
+def viz_transfer(x2y_df, y2x_df):
     """ Compare transfer regret for competing models """
-    sns.lineplot(data=df, x='iter', y='x2y', label='x2y')
-    sns.lineplot(data=df, x='iter', y='y2x', label='y2x')
+    sns.lineplot(data=x2y_df, x='iter', y='loss', label='x2y')
+    sns.lineplot(data=y2x_df, x='iter', y='loss', label='y2x')
     plt.title('Transfer Learning Adaptation')
     plt.ylabel('nll')
     plt.savefig(f'{opt.FIGPATH}/0transfer.png')
@@ -342,67 +342,57 @@ if __name__ == "__main__":
     opt.TRANS_DISTR = lambda i, n: normal(i, 2, n)*opt.X_SCALE
     # Meta
     opt.TRANS_LR = 0.01  # they transfer with a higher learning rate?
+    opt.TRANS_TASKS = 30
     opt.TRANS_ITER = 30
-    opt.FINETUNE_NUM_ITER = 1
     opt.TRANS_SAMPLES = opt.SAMPLES  # is same in theirs
     opt.N_EXP = 1
 
     snap(opt)
 
     # Transfer training and regret comparison for both models
-    res = {
-        'x2y': [],
-        'y2x': [],
-        'iter': [],
-    }
-    for i in range(opt.N_EXP):
-        scm = RandomSplineSCM(
-            input_noise=opt.INPUT_NOISE, 
-            output_noise=opt.OUTPUT_NOISE, 
-            span=opt.SPAN*2, 
-            num_anchors=opt.ANCHORS, 
-            order=opt.ORDER, 
-            range_scale=opt.SCALE
-        )
-        viz_dgp(scm, 'x2y')
-        viz_dgp(scm, 'y2x')
-        # models
-        model_x2y = mdn(opt)
-        model_y2x = mdn(opt)
-        if i == opt.N_EXP-1:
-            viz_cond_separate(model_x2y, polarity='x2y', name='PRE_')
-            viz_cond(model_x2y, polarity='x2y', name='PRE_')
-            viz_cond_separate(model_y2x, polarity='y2x', name='PRE_')
-            viz_cond(model_y2x, polarity='y2x', name='PRE_')
-        # causal conditional
-        frames_x2y = train_nll(opt, model_x2y, scm, opt.TRAIN_DISTR,
-            polarity='x2y', loss_fn=nll)
-        # anti-causal conditional
-        frames_y2x = train_nll(opt, model_y2x, scm, opt.TRAIN_DISTR,
-            polarity='y2x', loss_fn=nll)
-        if i == opt.N_EXP-1:
-            viz_learning_curve(frames_x2y, polarity='x2y')
-            viz_cond_separate(model_x2y, polarity='x2y', name='TRAIN_')
-            viz_cond(model_x2y, polarity='x2y', name='TRAIN_')
-            viz_learning_curve(frames_y2x, polarity='y2x')
-            viz_cond_separate(model_y2x, polarity='y2x', name='TRAIN_')
-            viz_cond(model_y2x, polarity='y2x', name='TRAIN_')
-        # transfer
-        x2y_frames, x2y_marginal, x2y_res = train_transfer(opt, model_x2y, scm, 'x2y')
-        y2x_frames, y2x_marginal, y2x_res = train_transfer(opt, model_y2x, scm, 'y2x')
-        res['x2y'] += [frame.loss for frame in x2y_frames]
-        res['y2x'] += [frame.loss for frame in y2x_frames]
-        res['iter'] += [frame.iter_num for frame in y2x_frames]
-        if i == opt.N_EXP-1:
-            viz_cond(model_x2y, polarity='x2y', name='TRANS_')
-            viz_cond(model_y2x, polarity='y2x', name='TRANS_')
-            viz_cond_separate(model_x2y, polarity='x2y', name='TRANS_')
-            viz_cond_separate(model_y2x, polarity='y2x', name='TRANS_')
-        print()
 
-    # viz some marginals
+    scm = RandomSplineSCM(
+        input_noise=opt.INPUT_NOISE, 
+        output_noise=opt.OUTPUT_NOISE, 
+        span=opt.SPAN*2, 
+        num_anchors=opt.ANCHORS, 
+        order=opt.ORDER, 
+        range_scale=opt.SCALE
+    )
+    viz_dgp(scm, 'x2y')
+    viz_dgp(scm, 'y2x')
+    # models
+    model_x2y = mdn(opt)
+    model_y2x = mdn(opt)
+    viz_cond_separate(model_x2y, polarity='x2y', name='PRE_')
+    viz_cond(model_x2y, polarity='x2y', name='PRE_')
+    viz_cond_separate(model_y2x, polarity='y2x', name='PRE_')
+    viz_cond(model_y2x, polarity='y2x', name='PRE_')
+    # causal conditional
+    frames_x2y = train_nll(opt, model_x2y, scm, opt.TRAIN_DISTR,
+        polarity='x2y', loss_fn=nll)
+    # anti-causal conditional
+    frames_y2x = train_nll(opt, model_y2x, scm, opt.TRAIN_DISTR,
+        polarity='y2x', loss_fn=nll)
+    viz_learning_curve(frames_x2y, polarity='x2y')
+    viz_cond_separate(model_x2y, polarity='x2y', name='TRAIN_')
+    viz_cond(model_x2y, polarity='x2y', name='TRAIN_')
+    viz_learning_curve(frames_y2x, polarity='y2x')
+    viz_cond_separate(model_y2x, polarity='y2x', name='TRAIN_')
+    viz_cond(model_y2x, polarity='y2x', name='TRAIN_')
+    # transfer
+    x2y_frames, x2y_marginal, x2y_res = train_transfer(opt, model_x2y, scm, 'x2y')
+    y2x_frames, y2x_marginal, y2x_res = train_transfer(opt, model_y2x, scm, 'y2x')
+    viz_cond(model_x2y, polarity='x2y', name='TRANS_')
+    viz_cond(model_y2x, polarity='y2x', name='TRANS_')
+    viz_cond_separate(model_x2y, polarity='x2y', name='TRANS_')
+    viz_cond_separate(model_y2x, polarity='y2x', name='TRANS_')
+
+    # viz marginals
     viz_marginal(x2y_marginal, opt.TRANS_DISTR, polarity=f'x2y')
     viz_marginal(y2x_marginal, lambda i, n: scm(opt.TRANS_DISTR(i, n)), polarity=f'y2x')
 
     # viz transfer learning
-    viz_transfer(pd.DataFrame(res))
+    viz_transfer(pd.DataFrame(x2y_res), pd.DataFrame(y2x_res))
+
+# TODO now to reproduce the 4 scale & noise conditions!
