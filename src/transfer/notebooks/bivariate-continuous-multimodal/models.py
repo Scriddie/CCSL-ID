@@ -40,4 +40,4 @@ def auc_transfer_metric(opt, model, model_g, inp, tar, nll):
     # Tune
     losses = transfer_tune(opt, model, model_g, inp, tar, nll)
     # Compute the integral of the loss curve
-    return sum(losses)
+    return sum(losses), losses

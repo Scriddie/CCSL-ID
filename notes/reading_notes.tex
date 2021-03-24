@@ -122,11 +122,16 @@ With output noise, the conditional loss of y2x seems to be a lot lower. Not anym
     \item Is it about which part of the network would have to 'move the furthest'??
     \item Scale and slopw are really the same thing....
     \item The network learns combinations that work fine for the input range but go bananas beyound, even for simple stuff like all zeros, or abline targets
+    \item TODO plot the NLLs in their continuous alpha training example to verify they are not the same for the models!
+    \item One could look at 'samples until convergence', rather than total regret, that would effectively check how much params have to change.
+    \item Without additive noise, we easily get collapsing densities and negative NLL values
 \end{itemize}
 
 \subsection{Findings}
 \begin{itemize}
-    \item For abline (intercept zero, slope 1) setting, the additive noise makes the difference
+    \item We need to add some significant noise to at least one variable, otherwise we risk collapsing probabilities
+    \item For additive noise on both variables, the direction is determined entirely by the scale. The variable with the wider scale will have more transfer change in the marginal and less change in the conditional.
+    \item For equal scale, the direction is determined entirely by the additive noise. With additive noise on Y, there is just more variation in the conditional, so there is not that much to be learnt there, and as a result transfer is quicker!
 \end{itemize}
 
 \printbibliography

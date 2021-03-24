@@ -15,12 +15,23 @@ from datetime import datetime
 
 
 # TODO concentrate all relevant logic in this file, compress to MVP
-from causal_meta.modules.mdn import mdn_nll as nll
 from causal_meta.utils.data_utils import RandomSplineSCM
 from argparse import Namespace
 
 from causal_meta.modules.gmm import GaussianMixture
 from causal_meta.modules.mdn import MDN
+
+
+def nll(pi_mu_sigma, y, reduce=True):
+    pi, mu, sigma = pi_mu_sigma
+    m = torch.distributions.Normal(loc=mu, scale=sigma)
+    log_prob_y = m.log_prob(y)
+    log_prob_pi_y = log_prob_y + torch.log(pi)
+    loss = -torch.logsumexp(log_prob_pi_y, dim=1)
+    if reduce:
+        return torch.mean(loss)
+    else:
+        return loss
 
 class RandomSplineSCM(nn.Module): 
     def __init__(self, input_noise=False, output_noise=True, 
@@ -31,7 +42,7 @@ class RandomSplineSCM(nn.Module):
         self._range_scale = range_scale
 
         if opt.ABLINE:
-            self._x = np.linspace(-span/opt.W, span/opt.W, num_anchors)
+            self._x = np.linspace(-span, span, num_anchors)
             self._y = np.linspace(-range_scale*span, range_scale*span, num_anchors)
         else:
             self._x = np.linspace(-span, span, num_anchors)
@@ -45,12 +56,12 @@ class RandomSplineSCM(nn.Module):
         if Z is None: 
             Z = self.sample(X.shape[0])
         if self.input_noise: 
-            X = X + Z
+            X = X + Z * self.input_noise
         X_np = X.detach().cpu().numpy().squeeze()
         _Y_np = interpolate.splev(X_np, self._spline_spec)
         _Y = torch.from_numpy(_Y_np).view(-1, 1).float().to(X.device)
         if self.output_noise:
-            Y = _Y + Z
+            Y = _Y + Z * self.output_noise
         else: 
             Y = _Y
         return Y
@@ -87,7 +98,7 @@ def viz_marginal(model, dgp, polarity=''):
     """ show marginal distribution """
     n = int(opt.N_VIZ)
     inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
-    orig = dgp(n).view(-1).numpy()
+    orig = dgp(opt.SWEEP(n), n).view(-1).numpy()
 
     pi, mu, sigma = model(inp)
     mixture = torch.distributions.Normal(loc=mu, scale=sigma)
@@ -164,7 +175,7 @@ def polarity_hlp(polarity, X, Y):
 
     if opt.NOISE_X:
         N = len(X)
-        X = X + torch.normal(torch.zeros(N), torch.ones(N)).view(-1, 1)
+        X = X + torch.normal(torch.zeros(N), torch.ones(N)).view(-1, 1)*opt.NOISE_X
 
     if polarity == 'x2y':
         inp, tar = X, Y
@@ -209,44 +220,47 @@ def train_nll(opt, model, scm, train_distr_fn, polarity,
     with torch.no_grad():
         nll_marg = loss_fn(marginal(inp), inp).item()
         nll_cond = loss_fn(model(inp), tar).item()
-    print(f'{polarity.upper()}\t NLL conditional: {nll_cond}\t NLL marginal: {nll_marg}\t NLL TOTAL: {nll_cond+nll_marg}')
+    print(f'TRAIN {polarity.upper()}\t NLL conditional: {nll_cond}\t NLL marginal: {nll_marg}\t NLL TOTAL: {nll_cond+nll_marg}')
     
     return frames
 
 def train_transfer(opt, model, scm,  polarity):
     """formerly in train_utils, reproduce different adaptation plots """
-
     # sample eval dataset from all across the distribution
-    # TODO is this a fair evaluation???
     X_eval = opt.TRANS_DISTR(opt.SWEEP(opt.N_EVAL), opt.N_EVAL)
     with torch.no_grad():
         Y_eval = scm(X_eval)
     X_eval, Y_eval = polarity_hlp(polarity, X_eval, Y_eval)
-    
+
     marginal = gmm(opt)
     marginal.fit(X_eval)
-    nll_marginal = nll(marginal(X_eval), X_eval)
+    nll_marg_eval = nll(marginal(X_eval), X_eval)
 
     # online grad desc and eval
     optim = torch.optim.Adam(model.parameters(), lr=opt.TRANS_LR)
     frames = []
+    res = {'loss': [], 'iter': [],}
     for i in tqdm(range(opt.TRANS_ITER)):
         x = opt.TRANS_DISTR(opt.SWEEP(1), opt.TRANS_SAMPLES)
         with torch.no_grad():
             y = scm(x)
         x, y = polarity_hlp(polarity, x, y)
+
         for j in range(opt.FINETUNE_NUM_ITER):
             loss_cond = nll(model(x), y)
             optim.zero_grad()
             loss_cond.backward()
             optim.step()
+            res['loss'].append(loss.detach().item())
+            res['iter'].append(i)
         # eval
         with torch.no_grad():
             nll_cond_eval = nll(model(X_eval), Y_eval)
-            # TODO why don't we get the same loss here in the end??
         frames.append(Namespace(iter_num=i,
-                        loss=nll_marginal.item() + nll_cond_eval.item()))
-    return frames, marginal
+                        loss=nll_marg_eval.item() + nll_cond_eval.item()))
+                        
+    print(f'TRANS {polarity.upper()}\t NLL conditional: {nll_cond_eval}\t NLL marginal: {nll_marg_eval}\t NLL TOTAL: {nll_cond_eval+nll_marg_eval}')
+    return frames, marginal, res
 
 def viz_transfer(df):
     """ Compare transfer regret for competing models """
@@ -302,15 +316,15 @@ if __name__ == "__main__":
     opt = Namespace()
     opt.N_VIZ = 1e3
     # DGP
-    opt.ABLINE = True
-    opt.W = 1
+    opt.ABLINE = False
     opt.NOISE_X = False
     opt.INPUT_NOISE = False
-    opt.OUTPUT_NOISE = False
+    opt.OUTPUT_NOISE = 1.
     opt.SPAN = 4
     opt.ANCHORS = 10
     opt.ORDER = 3
-    opt.SCALE = 2.
+    opt.X_SCALE = 1
+    opt.SCALE = 1
     # Model
     opt.CAPACITY = 32
     opt.NUM_COMPONENTS = 10
@@ -322,13 +336,13 @@ if __name__ == "__main__":
     opt.SAMPLES = 1000
     opt.N_EVAL = int(1e5)
     # Sampling 
-    opt.TRAIN_DISTR = lambda n: normal(0, 2, n)
+    opt.TRAIN_DISTR = lambda n: normal(0, 2, n)*opt.X_SCALE
     opt.SWEEP = lambda n: torch.tensor(
         np.random.randint(-opt.SPAN, opt.SPAN, n))
-    opt.TRANS_DISTR = lambda i, n: normal(i, 2, n)
+    opt.TRANS_DISTR = lambda i, n: normal(i, 2, n)*opt.X_SCALE
     # Meta
     opt.TRANS_LR = 0.01  # they transfer with a higher learning rate?
-    opt.TRANS_ITER = 200
+    opt.TRANS_ITER = 30
     opt.FINETUNE_NUM_ITER = 1
     opt.TRANS_SAMPLES = opt.SAMPLES  # is same in theirs
     opt.N_EXP = 1
@@ -374,8 +388,8 @@ if __name__ == "__main__":
             viz_cond_separate(model_y2x, polarity='y2x', name='TRAIN_')
             viz_cond(model_y2x, polarity='y2x', name='TRAIN_')
         # transfer
-        x2y_frames, x2y_marginal = train_transfer(opt, model_x2y, scm, 'x2y')
-        y2x_frames, y2x_marginal = train_transfer(opt, model_y2x, scm, 'y2x')
+        x2y_frames, x2y_marginal, x2y_res = train_transfer(opt, model_x2y, scm, 'x2y')
+        y2x_frames, y2x_marginal, y2x_res = train_transfer(opt, model_y2x, scm, 'y2x')
         res['x2y'] += [frame.loss for frame in x2y_frames]
         res['y2x'] += [frame.loss for frame in y2x_frames]
         res['iter'] += [frame.iter_num for frame in y2x_frames]
@@ -384,10 +398,11 @@ if __name__ == "__main__":
             viz_cond(model_y2x, polarity='y2x', name='TRANS_')
             viz_cond_separate(model_x2y, polarity='x2y', name='TRANS_')
             viz_cond_separate(model_y2x, polarity='y2x', name='TRANS_')
+        print()
 
     # viz some marginals
-    viz_marginal(x2y_marginal, opt.TRAIN_DISTR, polarity=f'x2y')
-    viz_marginal(y2x_marginal, lambda x: scm(opt.TRAIN_DISTR(x)), polarity=f'y2x')
+    viz_marginal(x2y_marginal, opt.TRANS_DISTR, polarity=f'x2y')
+    viz_marginal(y2x_marginal, lambda i, n: scm(opt.TRANS_DISTR(i, n)), polarity=f'y2x')
 
     # viz transfer learning
     viz_transfer(pd.DataFrame(res))

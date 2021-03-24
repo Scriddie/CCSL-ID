@@ -15,6 +15,7 @@ experiments/
 
 # Custom formats
 *.csv
+.Rhistory
 
 # latex
 *.out

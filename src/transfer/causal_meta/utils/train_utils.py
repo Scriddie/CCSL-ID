@@ -63,6 +63,11 @@ def train_alpha(opt, model_x2y, model_y2x, model_g2y, model_g2x, alpha, gt_scm,
         model_y2x.cuda()
     alpha_optim = torch.optim.Adam([alpha], lr=opt.ALPHA_LR)
     frames = []
+    res = {
+        'iter': [],
+        'x2y': [],
+        'y2x': [],
+    }
     iterations = tnrange(opt.ALPHA_NUM_ITER, leave=False)
     for iter_num in iterations:
         # Sample parameter for the transfer distribution
@@ -74,8 +79,11 @@ def train_alpha(opt, model_x2y, model_y2x, model_g2y, model_g2x, alpha, gt_scm,
             if opt.CUDA:
                 X_gt, Y_gt = X_gt.cuda(), Y_gt.cuda()
         # Evaluate performance
-        metric_x2y = transfer_metric(opt, model_x2y, model_g2x, X_gt, Y_gt, nll)
-        metric_y2x = transfer_metric(opt, model_y2x, model_g2y, Y_gt, X_gt, nll)
+        metric_x2y, losses_x2y = transfer_metric(opt, model_x2y, model_g2x, X_gt, Y_gt, nll)
+        metric_y2x, losses_y2x = transfer_metric(opt, model_y2x, model_g2y, Y_gt, X_gt, nll)
+        res['x2y'] += losses_x2y
+        res['y2x'] += losses_y2x
+        res['iter'] += list(range(len(losses_x2y)))
         # Estimate gradient
         if mixmode == 'logmix':
             loss_alpha = torch.sigmoid(alpha) * metric_x2y + (1 - torch.sigmoid(alpha)) * metric_y2x
@@ -99,7 +107,7 @@ def train_alpha(opt, model_x2y, model_y2x, model_g2y, model_g2x, alpha, gt_scm,
                                     metric_y2x=metric_y2x, 
                                     loss_alpha=loss_alpha.item()))
         iterations.set_postfix(alpha='{0:.4f}'.format(torch.sigmoid(alpha).item()))
-    return frames
+    return frames, res
 
 def make_alpha(opt):
     alpha = nn.Parameter(torch.tensor(0.).to('cuda' if opt.CUDA else 'cpu'))

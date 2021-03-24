@@ -17,9 +17,9 @@ class RandomSplineSCM(nn.Module):
         self._range_scale = range_scale
         self._x = np.linspace(-span, span, num_anchors)
 
-        self._y = np.linspace(-range_scale*span, range_scale*span, num_anchors)
-        # self._y = np.random.uniform(-range_scale * span, range_scale * span, 
-                                    # size=(num_anchors,))
+        # self._y = np.linspace(-range_scale*span, range_scale*span, num_anchors)
+        self._y = np.random.uniform(-range_scale * span, range_scale * span, 
+                                    size=(num_anchors,))
 
         self._spline_spec = interpolate.splrep(self._x, self._y, k=order)
         self.input_noise = input_noise
