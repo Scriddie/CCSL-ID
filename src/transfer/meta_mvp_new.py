@@ -29,12 +29,13 @@ class RandomSplineSCM(nn.Module):
         self._span = span
         self._num_anchors = num_anchors
         self._range_scale = range_scale
-        self._x = np.linspace(-span, span, num_anchors)
 
-        # TODO testing w=1
-        self._y = np.linspace(-span, span, num_anchors)
-        # self._y = np.random.uniform(-range_scale * span, range_scale * span, 
-        #                             size=(num_anchors,))
+        if opt.ABLINE:
+            self._x = np.linspace(-span/opt.W, span/opt.W, num_anchors)
+            self._y = np.linspace(-range_scale*span, range_scale*span, num_anchors)
+        else:
+            self._x = np.linspace(-span, span, num_anchors)
+            self._y = np.random.uniform(-range_scale * span, range_scale * span, size=(num_anchors,))
         
         self._spline_spec = interpolate.splrep(self._x, self._y, k=order)
         self.input_noise = input_noise
@@ -134,7 +135,7 @@ def viz_cond_separate(model, polarity='', name=''):
     inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
     with torch.no_grad():
         pi, mu, sigma = model(inp)
-
+    # mu
     for i in range(mu.shape[1]):
         rgba_colors = np.zeros((len(inp), 4))
         rgba_colors[:, 0:3] = colors.to_rgb('C'+str(i))
@@ -144,7 +145,19 @@ def viz_cond_separate(model, polarity='', name=''):
     plt.ylim((-10, 10))
     plt.legend(markerscale=5)
     plt.title(polarity)
-    plt.savefig(f'{opt.FIGPATH}/{name}{polarity}_cond_sep.png')
+    plt.savefig(f'{opt.FIGPATH}/{name}{polarity}_cond_mu.png')
+    plt.close()
+    # sigma
+    for i in range(sigma.shape[1]):
+        rgba_colors = np.zeros((len(inp), 4))
+        rgba_colors[:, 0:3] = colors.to_rgb('C'+str(i))
+        rgba_colors[:, 3] = pi[:, i]
+        plt.scatter(inp, sigma[:, i], color=rgba_colors, s=.3, label=str(i))
+    plt.xlim((-10, 10))
+    plt.ylim((-10, 10))
+    plt.legend(markerscale=5)
+    plt.title(polarity)
+    plt.savefig(f'{opt.FIGPATH}/{name}{polarity}_cond_sigma.png')
     plt.close()
 
 def polarity_hlp(polarity, X, Y):
@@ -241,7 +254,7 @@ def viz_transfer(df):
     sns.lineplot(data=df, x='iter', y='y2x', label='y2x')
     plt.title('Transfer Learning Adaptation')
     plt.ylabel('nll')
-    plt.savefig(f'{opt.FIGPATH}/transfer.png')
+    plt.savefig(f'{opt.FIGPATH}/0transfer.png')
     plt.close()
 
 def viz_dgp(scm, polarity):
@@ -289,13 +302,15 @@ if __name__ == "__main__":
     opt = Namespace()
     opt.N_VIZ = 1e3
     # DGP
+    opt.ABLINE = True
+    opt.W = 1
     opt.NOISE_X = False
     opt.INPUT_NOISE = False
     opt.OUTPUT_NOISE = False
     opt.SPAN = 4
-    opt.ANCHORS = 2
-    opt.ORDER = 1
-    opt.SCALE = 1.
+    opt.ANCHORS = 10
+    opt.ORDER = 3
+    opt.SCALE = 2.
     # Model
     opt.CAPACITY = 32
     opt.NUM_COMPONENTS = 10
@@ -316,7 +331,7 @@ if __name__ == "__main__":
     opt.TRANS_ITER = 200
     opt.FINETUNE_NUM_ITER = 1
     opt.TRANS_SAMPLES = opt.SAMPLES  # is same in theirs
-    opt.N_EXP = 3
+    opt.N_EXP = 1
 
     snap(opt)
 
@@ -337,13 +352,18 @@ if __name__ == "__main__":
         )
         viz_dgp(scm, 'x2y')
         viz_dgp(scm, 'y2x')
-
-        # causal conditional
+        # models
         model_x2y = mdn(opt)
+        model_y2x = mdn(opt)
+        if i == opt.N_EXP-1:
+            viz_cond_separate(model_x2y, polarity='x2y', name='PRE_')
+            viz_cond(model_x2y, polarity='x2y', name='PRE_')
+            viz_cond_separate(model_y2x, polarity='y2x', name='PRE_')
+            viz_cond(model_y2x, polarity='y2x', name='PRE_')
+        # causal conditional
         frames_x2y = train_nll(opt, model_x2y, scm, opt.TRAIN_DISTR,
             polarity='x2y', loss_fn=nll)
         # anti-causal conditional
-        model_y2x = mdn(opt)
         frames_y2x = train_nll(opt, model_y2x, scm, opt.TRAIN_DISTR,
             polarity='y2x', loss_fn=nll)
         if i == opt.N_EXP-1:

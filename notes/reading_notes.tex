@@ -115,12 +115,18 @@ With output noise, the conditional loss of y2x seems to be a lot lower. Not anym
     \item TODO investigate the impact of changing range on contitional vs. marginal complexity...
     \item Why da heck is y2x any different??? is it bc of the way transfer examples are sampled??? Transfer examples don't have any input noise!!!
     \item Their input and output noise aren't the added at the same point
+    \item Does standardization remove impact of scale range?
+    \item Scale range matters for transfer regret: the cause with wider range takes a longer time adjusting - is this true and is it about scale or is it about slope???
+    \item TODO test slope and scale independently!!!
+    \item output noise has an effect on the relative data scales! With sufficiently small additive noise, we can get alpha to go either way
+    \item Is it about which part of the network would have to 'move the furthest'??
+    \item Scale and slopw are really the same thing....
+    \item The network learns combinations that work fine for the input range but go bananas beyound, even for simple stuff like all zeros, or abline targets
 \end{itemize}
 
 \subsection{Findings}
 \begin{itemize}
-    \item For abline (intercept zero, slope 1) setting, it is really the noise that makes the difference!
-    \item add noise to X for once just to be sure
+    \item For abline (intercept zero, slope 1) setting, the additive noise makes the difference
 \end{itemize}
 
 \printbibliography
