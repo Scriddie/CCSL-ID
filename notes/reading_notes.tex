@@ -3,6 +3,9 @@
 \usepackage[left=1in, right=1in, top=1in, bottom=1in]{geometry}
 \usepackage{hyperref}
 \usepackage[at]{easylist}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
 \usepackage[
     doi=false,isbn=false,url=false,
     backend=biber,
@@ -100,40 +103,147 @@ Alternatively, maybe meta learning will work once we have output noise??
 We do have a lot of random fluctuations either way...
 With output noise, the conditional loss of y2x seems to be a lot lower. Not anymore without output noise?
 \begin{itemize}
-    \item TODO am I doing the evaluation right? I never retrain the gmm...
-    \item TODO what's a sufficiently large eval data set?
-    \item When I take n different randints to sample from in trans distr, convergence 
-    \item seems better... (Which I guess makes sense)
-    \item output noise makes training a lot more stable
-    \item TODO be very careful about not overtraining and divergence! some early 
-    \item stopping might make sense!
-    \item TODO maybe there is catastrophic forgetting in only one direction???
-    \item say, if in one direction it would be easier to re-fit the already fitted 
-    \item components / refitting would require some lasting change!
-    \item TODO so what role exactly does the noise play again? is it really necessary?
-    \item TODO stitch together plots to overview plots in code already?
-    \item TODO investigate the impact of changing range on contitional vs. marginal complexity...
-    \item Why da heck is y2x any different??? is it bc of the way transfer examples are sampled??? Transfer examples don't have any input noise!!!
-    \item Their input and output noise aren't the added at the same point
+    \item TODO maybe there is catastrophic forgetting in only one direction? say, if in one direction it would be easier to re-fit the already fitted components / refitting would require some lasting change!
     \item Does standardization remove impact of scale range?
-    \item Scale range matters for transfer regret: the cause with wider range takes a longer time adjusting - is this true and is it about scale or is it about slope???
-    \item TODO test slope and scale independently!!!
     \item output noise has an effect on the relative data scales! With sufficiently small additive noise, we can get alpha to go either way
-    \item Is it about which part of the network would have to 'move the furthest'??
-    \item Scale and slopw are really the same thing....
+    \item Is it about which part of the network would have to 'move the farthest'??
     \item The network learns combinations that work fine for the input range but go bananas beyound, even for simple stuff like all zeros, or abline targets
-    \item TODO plot the NLLs in their continuous alpha training example to verify they are not the same for the models!
     \item One could look at 'samples until convergence', rather than total regret, that would effectively check how much params have to change.
-    \item Without additive noise, we easily get collapsing densities and negative NLL values
+    \item I am still not quite sure if its a bias of their model or something about the data generation
 \end{itemize}
 
+\clearpage
 \subsection{Findings}
 \begin{itemize}
     \item We need to add some significant noise to at least one variable, otherwise we risk collapsing probabilities
-    \item For additive noise on both variables, the direction is determined entirely by the scale. The variable with the wider scale will have more transfer change in the marginal and less change in the conditional.
-    \item For equal scale, the direction is determined entirely by the additive noise. With additive noise on Y, there is just more variation in the conditional, so there is not that much to be learnt there, and as a result transfer is quicker!
+    \item Evaluation data set needs to be large for consistent effects
+    \item For equal additive noise on both variables, the direction is determined by the scale. The variable with the wider scale will have more transfer change in the marginal and less change in the conditional.
+    \item For equal scale, the direction is determined by the additive noise. With additive noise on Y, x2y is less likely than y2x, resulting in higher regret and better final fit of the conditional for y2x
 \end{itemize}
 
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/equal/x2y_data.png}
+        \caption{x2y data}
+    \end{subfigure}
+    \begin{subfigure}{.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/equal/y2x_data.png}
+        \caption{y2x data}
+    \end{subfigure}
+    \begin{subfigure}{.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/equal/0transfer.png}
+        \caption{For abline and equal additive noise, transfer is symmetrical.}
+    \end{subfigure}
+    \hfill
+    % 
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/noise_X/0transfer.png}
+        \caption{Additive noise on X}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/noise_Y/0transfer.png}
+        \caption{Additive noise on Y}
+    \end{subfigure}
+    \hfill
+    % 
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/squash_X/0transfer.png}
+        \caption{X on narrow scale}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/squash_Y/0transfer.png}
+        \caption{Y on narrow scale}
+    \end{subfigure}
+    \hfill
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/theirs_equal/x2y_data.png}
+        \caption{x2y data}
+    \end{subfigure}
+    \begin{subfigure}{.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/theirs_equal/y2x_data.png}
+        \caption{y2x data}
+    \end{subfigure}
+    \begin{subfigure}{.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/theirs_equal/0transfer.png}
+        \caption{For abline and equal additive noise, transfer is symmetrical.}
+    \end{subfigure}
+    \hfill
+    % 
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/theirs_noise_X/0transfer.png}
+        \caption{Additive noise on X}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/theirs_noise_Y/0transfer.png}
+        \caption{Additive noise on Y}
+    \end{subfigure}
+    \hfill
+    % 
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/theirs_squash_X/0transfer.png}
+        \caption{X on narrow scale}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/theirs_squash_Y/0transfer.png}
+        \caption{Y on narrow scale}
+    \end{subfigure}
+    \hfill
+\end{figure}
+
+\clearpage
+\subsection{Explanation}
+\begin{itemize}
+    \item x2y marginal fades out both ways, making it an easy fit for gmm. y2x marginal has one steep cutoff and a flat one, making it harder to fit.
+    \item x2y conditional is hard to fit, for each x mdn needs to get it exactly right. y2x conditional is easier to fit, at least for some time the two strands are pretty close and there is a margin of error.
+    \item This effect disappears once we use much narrower span values for transfer than we do for data generation
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/v_equal/x2y_data.png}
+        \caption{x2y data}
+    \end{subfigure}
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/v_equal/y2x_data.png}
+        \caption{y2x data}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{\linewidth}
+        \centering
+        \includegraphics[scale=0.8]{../src/transfer/experiments/v_equal/0transfer.png}
+        \caption{No symmetry even for equal additive noise on X and Y}
+    \end{subfigure}
+    \hfill
+    \caption{Bias visible in v-structure}
+\end{figure}
+
+\clearpage
 \printbibliography
 
 \end{document}
