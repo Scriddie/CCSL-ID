@@ -31,3 +31,4 @@ pkc.model$loglik
 
 praf.model = Mclust(df$PRAF, 3)
 plot(praf.model, what='density')
+praf.model$loglik

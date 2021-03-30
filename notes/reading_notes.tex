@@ -216,7 +216,7 @@ With output noise, the conditional loss of y2x seems to be a lot lower. Not anym
 \clearpage
 \subsection{Explanation}
 \begin{itemize}
-    \item x2y marginal fades out both ways, making it an easy fit for gmm. y2x marginal has one steep cutoff and a flat one, making it harder to fit.
+    \item x2y marginal fades out both ways, making it an easy fit for GMM. y2x marginal has one steep cutoff and a flat one, making it harder to fit.
     \item x2y conditional is hard to fit, for each x mdn needs to get it exactly right. y2x conditional is easier to fit, at least for some time the two strands are pretty close and there is a margin of error.
     \item This effect disappears once we use much narrower span values for transfer than we do for data generation
 \end{itemize}
@@ -242,6 +242,32 @@ With output noise, the conditional loss of y2x seems to be a lot lower. Not anym
     \hfill
     \caption{Bias visible in v-structure}
 \end{figure}
+
+\clearpage
+\subsection{Application to Sachs}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/PKC_PRAF/data_causal.png}
+    \end{subfigure}
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/PKC_PRAF/comparison.png}
+    \end{subfigure}
+    \hfill
+    % 
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/PKA_PRAF/data_causal.png}
+    \end{subfigure}
+    \begin{subfigure}{.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{../src/transfer/experiments/PKA_PRAF/comparison.png}
+    \end{subfigure}
+\end{figure}
+
 
 \clearpage
 \printbibliography

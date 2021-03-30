@@ -20,6 +20,13 @@ from mdn import MDN
 
 def nll(pi_mu_sigma, y, reduce=True):
     pi, mu, sigma = pi_mu_sigma
+    
+    # Make sure we only use non-zero sigmas
+    mask = np.argwhere(sigma.detach().numpy().mean(axis=0) != 0).reshape(-1)
+    pi = pi[:, mask]
+    mu = mu[:, mask]
+    sigma = sigma[:, mask]
+
     m = torch.distributions.Normal(loc=mu, scale=sigma)
     log_prob_y = m.log_prob(y)
     log_prob_pi_y = log_prob_y + torch.log(pi)
