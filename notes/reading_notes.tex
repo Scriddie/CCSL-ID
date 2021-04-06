@@ -36,9 +36,27 @@
 \end{easylist}
 
 \section{Related Literature}
+Nice resource on cell signalling pathways: \url{https://www.khanacademy.org/science/ap-biology/cell-communication-and-cell-cycle/changes-in-signal-transduction-pathways/a/intracellular-signal-transduction}.
+
+\subsection{Causal Structure Learning}
 \cite{itani2010structure} provide a good recipe for learning cyclical causal structure from interventional data.
 \cite{vowels2021} give a comprehensive overview over all kinds of structure learning methods and benchmarks.
 \cite{van2006syntren} provide a good overview over other network simulations.
+
+\subsection{Causal Networks in Biology}
+The original paper on the dream challenges etc. is \cite{hill2016inferring}.
+DREAM challenge data should be available here \url{https://www.synapse.org/#!Synapse:syn1720047}.
+\cite{hill2017context} address the problem of benchmarking causal network inference in biological data. Seems like they just recycled some of their findings from their 2016 paper? They say: However, we note that empirical
+assessment is a frontier topic in causal inference, and the
+assessment procedure used here is subject to a number of ca-
+veats.
+The \emph{in silico} data used in the DREAM challenges was generated according to \cite{chen2009input}.
+They are using some sort of funny score and don't seem to trust it a lot themselves. Previous DREAM challenges were predictive rather than causal.
+For the assessment they use some unseen interventions to get a gold standard network and du AUROC on that.
+
+\paragraph{Info on DREAM data}
+Basic information on the dataset \url{https://www.synapse.org/#!Wiki:syn1720047/ENTITY/56061}. Additional information on the dataset\url{https://www.synapse.org/#!Wiki:syn1720047/ENTITY/56210}.
+
 
 \subsection{Datasets}
 
@@ -70,6 +88,7 @@ He shows that unlike in in-silico data and E.coli data, for yeast co-regulated g
 
 Tuebingen causality pairs \url{https://webdav.tuebingen.mpg.de/cause-effect/} (only observational).
 Try varsortability in the bivariate case?
+
 
 \section{Conceptional Work}
     - Leap of abstraction from PDE to causal graph

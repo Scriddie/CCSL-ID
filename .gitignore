@@ -1,8 +1,13 @@
 # venv
 cache/
 ccslid_env/
+
+# custom files
 scanpy_course/3k_PBMC
 *.zip
+download.txt
+*/Benchmark-Models-PEtab
+data/
 
 # custom folders
 figures/
