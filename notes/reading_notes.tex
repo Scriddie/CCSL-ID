@@ -43,6 +43,39 @@ Nice resource on cell signalling pathways: \url{https://www.khanacademy.org/scie
 \cite{vowels2021} give a comprehensive overview over all kinds of structure learning methods and benchmarks.
 \cite{van2006syntren} provide a good overview over other network simulations.
 
+\subsubsection{DCDI}
+\begin{enumerate}
+    \item Why does the adjacency matrix not change???
+    \item Go through "forward_given_params" in base_model
+    \item How do they generate data? Check \cite{hauser2012characterization}
+    \item What are their data generation regimes???
+    \item Shouldnt they have to copy x at some point in their loss calculation?
+    \item What exactly are their "conditional distributions"?
+    \item Check out their "plot-density" for the two-variable case!
+    \item Where exactly does the adj mat learning come in?
+    \item How (well) do they solve the observational case?
+    \item How does this relate to the interventional case?
+    \item Can I create a "counterexample" with some special interventions?
+\end{enumerate}
+
+\noindent
+Observations
+\begin{enumerate}
+    \item Getting the combination of lr and lagrangian penalties right is not straightforward
+    \item In their implementation, they effectively model distributions first, then slowly let the lagrangian kick in
+\end{enumerate}
+
+\paragraph{Where does the adjacency matrix come in?}
+In einsum notation of BaseModel forward
+
+\paragraph{How do they evaluate fit?}
+NLL of their generative model
+
+Random Notes
+\begin{itemize}
+    \item They normalize their data
+\end{itemize}
+
 \subsection{Causal Networks in Biology}
 The original paper on the dream challenges etc. is \cite{hill2016inferring}.
 DREAM challenge data should be available here \url{https://www.synapse.org/#!Synapse:syn1720047}.
@@ -55,8 +88,16 @@ They are using some sort of funny score and don't seem to trust it a lot themsel
 For the assessment they use some unseen interventions to get a gold standard network and du AUROC on that.
 
 \paragraph{Info on DREAM data}
-Basic information on the dataset \url{https://www.synapse.org/#!Wiki:syn1720047/ENTITY/56061}. Additional information on the dataset\url{https://www.synapse.org/#!Wiki:syn1720047/ENTITY/56210}.
+Basic information on the dataset \url{https://www.synapse.org/#!Wiki:syn1720047/ENTITY/56061}. Additional information on the dataset\url{https://www.synapse.org/#!Wiki:syn1720047/ENTITY/56210}. The webpage for the 2013 DREAM challenge can be found here \url{https://dreamchallenges.org/dream-8-hpn-dream-breast-cancer-network-inference-challenge/}.
 
+Nice overview on cell network inference here \url{http://compbio.mit.edu/marbach/projectsdaniel.html}.
+
+This 5-node network in yeast might also be useful \cite{cantone2009yeast}.
+
+\vspace{.5em}
+
+It looks like this guz\url{https://github.com/gungorbudak/netinf-bigcat} did a pretty similar thing at bigcat in Maastricht 8 years ago?
+This MSc thesis is also very similar in spirit \url{https://github.com/ninakersten/Masterthesis}.
 
 \subsection{Datasets}
 
@@ -80,6 +121,8 @@ Visualize and compare that to Sachs et al and another dataset from vowels2021
 
 \paragraph{PathCards} unifies several sources on human biological pathways \cite{belinky2015pathcards}.
 They provide a good overview over other pathway sources.
+
+\paragraph{OmniPath} I should probably use OmniPath to make sure the neetworks used in the DREAM challenge are still up to date?
 
 \subsection{Benchmarking}
 
