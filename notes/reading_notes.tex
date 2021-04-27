@@ -65,6 +65,8 @@ TODOs
     \item Can I create a "counterexample" with some special interventions?
     \item Are we really only looking at conditional probabilities?
     \item Can we play around with likelihoods? e.g. use uniform or something?
+    \item Do we need full int coverage?
+    \item What value do obs data give us? Is there an optimal ratio obs/int data?
 \end{enumerate}
 
 \noindent
@@ -72,8 +74,12 @@ Observations
 \begin{enumerate}
     \item They are scaling each interventional distribution separately right after generation (dat\_generator.py). This might lose a lot of information? In their default settings they use uniform, so it is less severe. But for shift\_normal, it completely defeats the purpose of the intervention.
     \item They also standardize the entire dataset later, but those parts of the code are bugged and do not work (generate\_data.py)!
-    \item Their sparsity constraint hyperparam can really mess things up. Is there a good way of setting it?
-    \item Getting the combination of lr and lagrangian penalties right is not straightforward
+    \item Their sparsity constraint hyperparam can really mess things up. Is there a good way of setting it? By setting it to zero, I can learn something sensible in the bivariate case
+    \item Outlier removal seems to be decisive, at least in the MEK-ERK case.
+    \item MEK-ERK works; PKA-P38 fails; PKA-JNK works; PKA-ERK works;
+    \item It seems that too large a body of obs data can render the int data ineffective
+    \item Stochasticity at small batch size can be a problem
+    \item Getting the combination of lr and lagrangian penalties right is not straightforward. We need to keep the mu increases small.
     \item In their implementation, they effectively model distributions first, then slowly let the lagrangian kick in
     \item They do not solve the observational case particularly well (they get the causal direction in Gaussian NV ANMs 50-50, just as one would expect and like notears.)
 \end{enumerate}
