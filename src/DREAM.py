@@ -7,6 +7,7 @@ import networkx as nx
 from pathlib import Path
 from networkx.drawing.nx_agraph import graphviz_layout
 from argparse import Namespace
+from utils.viz import *
 
 
 def load_gs(verbose=False):
@@ -21,15 +22,6 @@ def load_gs(verbose=False):
     gs.columns = list(names.iloc[:,0])
     gs.index = list(names.iloc[:, 0])
     return gs
-
-def viz_graph(opt, graph, name='gs_graph'):
-    """ viz graph """
-    G = nx.from_numpy_array(graph.values, create_using=nx.DiGraph)
-    # G = nx.relabel_nodes(G, {i: list(graph.columns)[i] for i in list(range(len(G)))})
-    pos=graphviz_layout(G, prog='dot')
-    nx.draw(G, pos, node_color="lightblue", edge_color="black",
-        with_labels=True, arrows=True,)
-    plt.savefig(f"{opt.figpath}/{name}.png")
 
 def viz_node(opt, df, node, name=''):
     nrows = 2

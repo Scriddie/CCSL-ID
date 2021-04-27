@@ -44,25 +44,44 @@ Nice resource on cell signalling pathways: \url{https://www.khanacademy.org/scie
 \cite{van2006syntren} provide a good overview over other network simulations.
 
 \subsubsection{DCDI}
+\noindent
+TODOs
 \begin{enumerate}
-    \item Why does the adjacency matrix not change???
-    \item Go through "forward_given_params" in base_model
-    \item How do they generate data? Check \cite{hauser2012characterization}
-    \item What are their data generation regimes???
+    \item save some jointplots from generate\_data and compare to sachs jointplots!
+    \item Their 'perfect' interventions are still stochastic, right?
+    \item Can they still infer directionality uner shift\_intervention with their but?
+    \item Run on sachs data!
+    \item Not quite sure what's going on with num\_regimes dimensions at base model creation
+    \item How can they tell cause from effect under shift\_normal interventions that get rescaled to standard normal immediately?
+    \item What does their interv\_mask really do?
+    \item Go through 'forward\_given\_params' in base\_model
+    \item How do they generate data?
     \item Shouldnt they have to copy x at some point in their loss calculation?
     \item What exactly are their "conditional distributions"?
     \item Check out their "plot-density" for the two-variable case!
     \item Where exactly does the adj mat learning come in?
-    \item How (well) do they solve the observational case?
+    \item How does their obs data solution compare to lars lasso bic regression with random direction? 
     \item How does this relate to the interventional case?
     \item Can I create a "counterexample" with some special interventions?
+    \item Are we really only looking at conditional probabilities?
+    \item Can we play around with likelihoods? e.g. use uniform or something?
 \end{enumerate}
 
 \noindent
 Observations
 \begin{enumerate}
+    \item They are scaling each interventional distribution separately right after generation (dat\_generator.py). This might lose a lot of information? In their default settings they use uniform, so it is less severe. But for shift\_normal, it completely defeats the purpose of the intervention.
+    \item They also standardize the entire dataset later, but those parts of the code are bugged and do not work (generate\_data.py)!
+    \item Their sparsity constraint hyperparam can really mess things up. Is there a good way of setting it?
     \item Getting the combination of lr and lagrangian penalties right is not straightforward
     \item In their implementation, they effectively model distributions first, then slowly let the lagrangian kick in
+    \item They do not solve the observational case particularly well (they get the causal direction in Gaussian NV ANMs 50-50, just as one would expect and like notears.)
+\end{enumerate}
+
+\noindent
+What is actually going on in their DCDI-G model?
+\begin{enumerate}
+    \item 
 \end{enumerate}
 
 \paragraph{Where does the adjacency matrix come in?}
@@ -71,10 +90,6 @@ In einsum notation of BaseModel forward
 \paragraph{How do they evaluate fit?}
 NLL of their generative model
 
-Random Notes
-\begin{itemize}
-    \item They normalize their data
-\end{itemize}
 
 \subsection{Causal Networks in Biology}
 The original paper on the dream challenges etc. is \cite{hill2016inferring}.
