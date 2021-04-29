@@ -16,7 +16,7 @@ def test_lr():
 
 
 # path = 'src/dcdi/data/perfect/data_p10_e10_n10000_linear_struct'
-path = 'src/dcdi/data/custom_data/data_p2_e1.0_n10000_custom'
+path = 'src/dcdi/data/custom_data/data_p2_e1.0_n1000_custom'
 
 M = np.load(f'{path}/DAG1.npy')
 print(M)

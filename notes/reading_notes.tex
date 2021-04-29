@@ -48,6 +48,8 @@ Nice resource on cell signalling pathways: \url{https://www.khanacademy.org/scie
 TODOs
 \begin{enumerate}
     \item save some jointplots from generate\_data and compare to sachs jointplots!
+    \item There is data1 and data\_interv1!!!
+    \item Am I using the mask wrong? Where are my bimodal marginals???
     \item Their 'perfect' interventions are still stochastic, right?
     \item Can they still infer directionality uner shift\_intervention with their but?
     \item Run on sachs data!
@@ -66,22 +68,50 @@ TODOs
     \item Are we really only looking at conditional probabilities?
     \item Can we play around with likelihoods? e.g. use uniform or something?
     \item Do we need full int coverage?
-    \item What value do obs data give us? Is there an optimal ratio obs/int data?
+    \item What value do obs data give us? Is there an optimal ratio obs/int 
+    data?
+    \item What's the impact of interventions having a different distribution?
+    \item don't a lot of things just depend on our number of (obs/int) data points? (which will determine our likelihood)
+    \item How do we still explain the cause variable after the edge has gone? is it just the bias parameters??
+    \item What exactly happened with the mask when the bug was there?
 \end{enumerate}
 
 \noindent
 Observations
 \begin{enumerate}
+
     \item They are scaling each interventional distribution separately right after generation (dat\_generator.py). This might lose a lot of information? In their default settings they use uniform, so it is less severe. But for shift\_normal, it completely defeats the purpose of the intervention.
     \item They also standardize the entire dataset later, but those parts of the code are bugged and do not work (generate\_data.py)!
-    \item Their sparsity constraint hyperparam can really mess things up. Is there a good way of setting it? By setting it to zero, I can learn something sensible in the bivariate case
-    \item Outlier removal seems to be decisive, at least in the MEK-ERK case.
-    \item MEK-ERK works; PKA-P38 fails; PKA-JNK works; PKA-ERK works;
-    \item It seems that too large a body of obs data can render the int data ineffective
-    \item Stochasticity at small batch size can be a problem
     \item Getting the combination of lr and lagrangian penalties right is not straightforward. We need to keep the mu increases small.
     \item In their implementation, they effectively model distributions first, then slowly let the lagrangian kick in
     \item They do not solve the observational case particularly well (they get the causal direction in Gaussian NV ANMs 50-50, just as one would expect and like notears.)
+\end{enumerate}
+
+\noindent
+Observations 27.04.2021
+\begin{enumerate}
+    \item Outlier removal might make a difference, at least in the MEK-ERK case.
+    \item MEK-ERK works; PKA-P38 fails; PKA-JNK works; PKA-ERK works;
+    \item It seems that too large a body of obs data can render the int data ineffective
+    \item Stochasticity at small batch size can be a problem
+    \item What are they doing with name\_data??? It's never read at all? Currently we are applying intervention masks to observational data?
+    \item Their sparsity constraint hyperparam can really mess things up. Is there a good way of setting it? By setting it to zero, I can learn something sensible in the bivariate case
+\end{enumerate}
+
+\noindent
+Observations 28.04.21
+\begin{enumerate}
+    \item For MEK the outliers cause a completely different distributin after scaling in the obs setting
+    \item Whether or not to standardize regimes individually is not that straightforward!
+    \item U0126 perturbation might be a special case as it does not prevent phosphorylation but inhibits otherwise from what I understand. We see this across charts, e.g. in RAF-MEK - seems like a lot more MEK is produced under inhibitor. Interestingly, under U0126, there is a clear trend between PKC and JNK that's otherwise absent.
+    \item Their compute\_loss nll still doesn't seem right. Shouldn't they divide by the number of non-zero mask entries?
+    \item Distribution fits do not get worse because mask is applied only at loss calculation.
+    \item If I am right about the potential but in nll calculation, then I should see that an intervention on the effect inevitably leats to learning the effect as a cause!
+    \item Why is their code working even if I intervene on effect???
+    \item Sometimes their nlls are negative. Can that be a problem? logsumexp?
+    \item Maybe I should standardize each intervention separately??? the shift from zero might be why we learn the correct causal direction, even with an intervention on the effect node!
+    \item We have to scae each regime individually for likelihood, but doesn't that also loose some (a lot of) information? is there a logical contradiction?
+    \item Why doesn't it just work even without additive noise?
 \end{enumerate}
 
 \noindent
