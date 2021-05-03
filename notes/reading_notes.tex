@@ -2,6 +2,8 @@
 
 \usepackage[left=1in, right=1in, top=1in, bottom=1in]{geometry}
 \usepackage{hyperref}
+\usepackage{amsfonts}
+\usepackage{amsmath}
 \usepackage[at]{easylist}
 \usepackage{graphicx}
 \usepackage{float}
@@ -47,33 +49,17 @@ Nice resource on cell signalling pathways: \url{https://www.khanacademy.org/scie
 \noindent
 TODOs
 \begin{enumerate}
-    \item save some jointplots from generate\_data and compare to sachs jointplots!
-    \item There is data1 and data\_interv1!!!
-    \item Am I using the mask wrong? Where are my bimodal marginals???
-    \item Their 'perfect' interventions are still stochastic, right?
-    \item Can they still infer directionality uner shift\_intervention with their but?
-    \item Run on sachs data!
-    \item Not quite sure what's going on with num\_regimes dimensions at base model creation
-    \item How can they tell cause from effect under shift\_normal interventions that get rescaled to standard normal immediately?
-    \item What does their interv\_mask really do?
-    \item Go through 'forward\_given\_params' in base\_model
-    \item How do they generate data?
     \item Shouldnt they have to copy x at some point in their loss calculation?
     \item What exactly are their "conditional distributions"?
     \item Check out their "plot-density" for the two-variable case!
-    \item Where exactly does the adj mat learning come in?
     \item How does their obs data solution compare to lars lasso bic regression with random direction? 
     \item How does this relate to the interventional case?
     \item Can I create a "counterexample" with some special interventions?
-    \item Are we really only looking at conditional probabilities?
-    \item Can we play around with likelihoods? e.g. use uniform or something?
-    \item Do we need full int coverage?
     \item What value do obs data give us? Is there an optimal ratio obs/int 
     data?
     \item What's the impact of interventions having a different distribution?
     \item don't a lot of things just depend on our number of (obs/int) data points? (which will determine our likelihood)
-    \item How do we still explain the cause variable after the edge has gone? is it just the bias parameters??
-    \item What exactly happened with the mask when the bug was there?
+    \item What are thee extra params?
 \end{enumerate}
 
 \noindent
@@ -85,22 +71,12 @@ Observations
     \item Getting the combination of lr and lagrangian penalties right is not straightforward. We need to keep the mu increases small.
     \item In their implementation, they effectively model distributions first, then slowly let the lagrangian kick in
     \item They do not solve the observational case particularly well (they get the causal direction in Gaussian NV ANMs 50-50, just as one would expect and like notears.)
-\end{enumerate}
-
-\noindent
-Observations 27.04.2021
-\begin{enumerate}
     \item Outlier removal might make a difference, at least in the MEK-ERK case.
     \item MEK-ERK works; PKA-P38 fails; PKA-JNK works; PKA-ERK works;
     \item It seems that too large a body of obs data can render the int data ineffective
     \item Stochasticity at small batch size can be a problem
     \item What are they doing with name\_data??? It's never read at all? Currently we are applying intervention masks to observational data?
     \item Their sparsity constraint hyperparam can really mess things up. Is there a good way of setting it? By setting it to zero, I can learn something sensible in the bivariate case
-\end{enumerate}
-
-\noindent
-Observations 28.04.21
-\begin{enumerate}
     \item For MEK the outliers cause a completely different distributin after scaling in the obs setting
     \item Whether or not to standardize regimes individually is not that straightforward!
     \item U0126 perturbation might be a special case as it does not prevent phosphorylation but inhibits otherwise from what I understand. We see this across charts, e.g. in RAF-MEK - seems like a lot more MEK is produced under inhibitor. Interestingly, under U0126, there is a clear trend between PKC and JNK that's otherwise absent.
@@ -110,21 +86,42 @@ Observations 28.04.21
     \item Why is their code working even if I intervene on effect???
     \item Sometimes their nlls are negative. Can that be a problem? logsumexp?
     \item Maybe I should standardize each intervention separately??? the shift from zero might be why we learn the correct causal direction, even with an intervention on the effect node!
-    \item We have to scae each regime individually for likelihood, but doesn't that also loose some (a lot of) information? is there a logical contradiction?
-    \item Why doesn't it just work even without additive noise?
+    \item We have to scale each regime individually for likelihood, but doesn't that also loose some (a lot of) information? is there a logical contradiction?
+    \item For the two variables I picked, which have a pretty clear linear trend, if I mask out 50\% such that they can only be used for explanations one way - it should kind of work. I wonder if  there is a way to connect this back to the bengio transfer-learning paper. After all DCDI also chooses the model that minimizes conditional nll. If the optimal likelihoods X->Y and Y<-X are quite similar, perhaps the intervention will make the difference. If they are quite different, we might need a very strong intervention to overcome that inherent bias...
+    \item Seems like whether or not the trend in int and obs is the same makes quite a difference (at least when the support overlaps?). This might be related to the obs/marg likelihoods.
+    \item I'm still not quite sure about the standardization procedures in that regard. I've been thinking that one should standardize the entire data set rather than each regime. That would allow to take advantage of potential increases in support through intervantions. On the flip sice, in the case of a shift intervention, it really compresses both peaks which has an impact on the likelihood.
+    In DCDI's initial implementation where they standardize each regime separately, that is not a problem. However, they may end up with having the same support for observational and interventional data and will require the optimal weight to be identical, even if it was rightfully different on the raw scale.
 \end{enumerate}
 
-\noindent
-What is actually going on in their DCDI-G model?
-\begin{enumerate}
-    \item 
-\end{enumerate}
+\subsection{Score}
 
-\paragraph{Where does the adjacency matrix come in?}
-In einsum notation of BaseModel forward
+% \begin{equation}
+    
+% \end{equation}
 
-\paragraph{How do they evaluate fit?}
-NLL of their generative model
+\begin{equation}
+    f^{(k)}(X, M, R, \phi) = \prod_{j=1}^{d} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}
+\end{equation}
+
+\begin{equation}
+    S_{\mathcal{I}}(G) = \sup \sum_{k=1}^K \mathbb{E}_{X ~ p^{k}} \log f^{(k)}(X, M, R, \phi) - \lambda |G|
+\end{equation}
+
+% TODO: check if mean is in right place
+\begin{equation}
+    \underset{G}{\mathrm{argmax}} \quad \sum_{k=1}^K \frac{1}{n} \sum_{i=1}^N \log(\tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}) - \lambda |G|
+\end{equation}
+
+
+\subsection{Pseudocode}
+\begin{verbatim}
+    for i in range(num_vars):
+        density_params = model(x, weights, biases, masks, regime)
+        # extra params?
+        log_probs = distribution(density_params).log_prob(x[:, i])
+        # mask
+        # mean
+\end{verbatim}
 
 
 \subsection{Causal Networks in Biology}
