@@ -16,16 +16,19 @@ def test_lr():
 
 
 # path = 'src/dcdi/data/perfect/data_p10_e10_n10000_linear_struct'
-path = 'src/dcdi/data/custom_data/data_p2_e1.0_n1000_custom'
+path = 'src/dcdi/data/perfect/data_p10_e10_n10000_nnadd_struct'
+# path = 'src/dcdi/data/custom_data/data_p2_e1.0_n1000_custom'
 
 M = np.load(f'{path}/DAG1.npy')
 print(M)
 
 data = np.load(f'{path}/data_interv1.npy')
 print(data.shape)
-viz.graph(M, save='src/experiments/figures/graph.png')
-viz.marg(data, save='src/experiments/figures/marg.png')
-viz.heat(M, save='src/experiments/figures/gt_graph.png')
+print(data[:910, :].mean(axis=0))
+print(data[:910, :].std(axis=0))
+viz.graph(M, save=path+'/graph.png')
+viz.marg(data, save=path+'/marg.png')
+viz.heat(M, save=path+'/gt_graph.png')
 # TODO viz learnt graph, see if the intervened-upon nodes are an easier fit
 # viz.graph(M, save='src/experiments/figures/est_graph.png')
 

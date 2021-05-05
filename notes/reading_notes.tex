@@ -59,14 +59,17 @@ TODOs
     data?
     \item What's the impact of interventions having a different distribution?
     \item don't a lot of things just depend on our number of (obs/int) data points? (which will determine our likelihood)
-    \item What are thee extra params?
+    \item What are these extra params?
+    \item Check the different gumbel matrices
+    \item We should try treating perfect inter as unknown but with identical params (mask out at input stage)
+    \item Their method (with standardization per regime) should not work for non-linear relationships
 \end{enumerate}
 
 \noindent
 Observations
 \begin{enumerate}
-
-    \item They are scaling each interventional distribution separately right after generation (dat\_generator.py). This might lose a lot of information? In their default settings they use uniform, so it is less severe. But for shift\_normal, it completely defeats the purpose of the intervention.
+    \item They are scaling each interventional distribution separately right after generation (dat\_generator.py). This might lose a lot of information? In their default settings they use uniform, so it is less severe. But for shift\_normal, it counteracts some of the purpose of the intervention.
+    \item In their data they seem to have standardized per regime
     \item They also standardize the entire dataset later, but those parts of the code are bugged and do not work (generate\_data.py)!
     \item Getting the combination of lr and lagrangian penalties right is not straightforward. We need to keep the mu increases small.
     \item In their implementation, they effectively model distributions first, then slowly let the lagrangian kick in
@@ -91,6 +94,7 @@ Observations
     \item Seems like whether or not the trend in int and obs is the same makes quite a difference (at least when the support overlaps?). This might be related to the obs/marg likelihoods.
     \item I'm still not quite sure about the standardization procedures in that regard. I've been thinking that one should standardize the entire data set rather than each regime. That would allow to take advantage of potential increases in support through intervantions. On the flip sice, in the case of a shift intervention, it really compresses both peaks which has an impact on the likelihood.
     In DCDI's initial implementation where they standardize each regime separately, that is not a problem. However, they may end up with having the same support for observational and interventional data and will require the optimal weight to be identical, even if it was rightfully different on the raw scale.
+    \item extra params model log stds (learnable but do not depend on parents) That means distribution stds do not depend on parents?
 \end{enumerate}
 
 \subsection{Score}
@@ -109,18 +113,29 @@ Observations
 
 % TODO: check if mean is in right place
 \begin{equation}
-    \underset{G}{\mathrm{argmax}} \quad \sum_{k=1}^K \frac{1}{n} \sum_{i=1}^N \log(\tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}) - \lambda |G|
+    \underset{G}{\mathrm{argmax}} \quad \frac{1}{K} \sum_{k=1}^K \frac{1}{N} \sum_{i=1}^N \log(\tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}) - \lambda |G|
+\end{equation}
+
+% Score for perfect interventions
+\begin{equation}
+    \underset{G}{\mathrm{argmax}} \quad
 \end{equation}
 
 
 \subsection{Pseudocode}
 \begin{verbatim}
     for i in range(num_vars):
-        density_params = model(x, weights, biases, masks, regime)
-        # extra params?
-        log_probs = distribution(density_params).log_prob(x[:, i])
-        # mask
-        # mean
+        
+        if intervention == 'perfect':
+            density_params = model(x, weights, biases, extra_params)
+            log_probs = distribution(density_params).log_prob(x[:, i]) * mask
+
+        else:  # imperfect/unknown intervention
+            density_params = model(x, weights, biases, extra_params, masks, regime)
+            log_probs = distribution(density_params).log_prob(x[:. i])
+        
+        log_likelihood = torch.mean(log_probs)
+
 \end{verbatim}
 
 
