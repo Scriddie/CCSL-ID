@@ -63,6 +63,7 @@ TODOs
     \item Check the different gumbel matrices
     \item We should try treating perfect inter as unknown but with identical params (mask out at input stage)
     \item Their method (with standardization per regime) should not work for non-linear relationships
+    \item Where do the spikes come from in the loss chart? Are we losing the NLL-params at every aug. lagrangian update step?
 \end{enumerate}
 
 \noindent
@@ -95,6 +96,7 @@ Observations
     \item I'm still not quite sure about the standardization procedures in that regard. I've been thinking that one should standardize the entire data set rather than each regime. That would allow to take advantage of potential increases in support through intervantions. On the flip sice, in the case of a shift intervention, it really compresses both peaks which has an impact on the likelihood.
     In DCDI's initial implementation where they standardize each regime separately, that is not a problem. However, they may end up with having the same support for observational and interventional data and will require the optimal weight to be identical, even if it was rightfully different on the raw scale.
     \item extra params model log stds (learnable but do not depend on parents) That means distribution stds do not depend on parents?
+    \item If not one of two opposing edges goes to zero immediately, they will 'fight' and both end up at zero. There needs to be a convincing winner. The problem could potentially be mitigated by choosing smaller mu update steps in the lagrangian.
 \end{enumerate}
 
 \subsection{Score}
@@ -103,6 +105,7 @@ Observations
     
 % \end{equation}
 
+\subsubsection{General Model}
 \begin{equation}
     f^{(k)}(X, M, R, \phi) = \prod_{j=1}^{d} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}
 \end{equation}
@@ -116,9 +119,15 @@ Observations
     \underset{G}{\mathrm{argmax}} \quad \frac{1}{K} \sum_{k=1}^K \frac{1}{N} \sum_{i=1}^N \log(\tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}) - \lambda |G|
 \end{equation}
 
+\subsubsection{Perfect Interventions}
 % Score for perfect interventions
 \begin{equation}
-    \underset{G}{\mathrm{argmax}} \quad
+    \begin{split}
+        & X \in \mathbb{R}^{n \times d} \\
+        & M^G \in \mathbb{R}^{d \times d} := \text{sigmoid}(G) > 0.5 \\
+        & \mathcal{M} \in \mathbb{R}^{n \times d} \quad \text{(intervention mask)} \\
+        & \underset{G}{\mathrm{argmax}} \quad \sum^n_{i=1} \sum^d_{j=1} \mathcal{N}(\text{NN}(M^G_j \odot x^{(i)}, \phi), 1)_{\text{logPDF}}(x^{(i)}_j) \cdot \mathcal{M}^{(i)}_j
+    \end{split}
 \end{equation}
 
 
