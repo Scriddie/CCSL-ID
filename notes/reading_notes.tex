@@ -64,6 +64,8 @@ TODOs
     \item We should try treating perfect inter as unknown but with identical params (mask out at input stage)
     \item Their method (with standardization per regime) should not work for non-linear relationships
     \item Where do the spikes come from in the loss chart? Are we losing the NLL-params at every aug. lagrangian update step?
+    \item We'd have to have a network with optimal parameters ready for every possible combinations of inputs? Since that's not feasible, can the networks retrain sensibly?
+    \item TODO I should look at that paper that claims to have 70\% success on the tuebingen cause-effect data set.
 \end{enumerate}
 
 \noindent
@@ -97,6 +99,11 @@ Observations
     In DCDI's initial implementation where they standardize each regime separately, that is not a problem. However, they may end up with having the same support for observational and interventional data and will require the optimal weight to be identical, even if it was rightfully different on the raw scale.
     \item extra params model log stds (learnable but do not depend on parents) That means distribution stds do not depend on parents?
     \item If not one of two opposing edges goes to zero immediately, they will 'fight' and both end up at zero. There needs to be a convincing winner. The problem could potentially be mitigated by choosing smaller mu update steps in the lagrangian.
+    \item The acyclicity constraint may eliminate the inputs to cycles before the actual cycles. This could be a fundamental problem!
+    \item I am still very unsure about the individual standardization
+    \item They assume homoscedasticity
+    \item The adversarial sachs et al example should also be bad news for sparsity constraints, no?
+    \item Under model misspecification I have no score equivalence either way. Why no take score equivalence to make sure I specified my model correcty?
 \end{enumerate}
 
 \subsection{Score}

@@ -1,3 +1,4 @@
+""" MVP self contained-version of causal discovery through transfer learning """
 import torch
 import torch.nn as nn
 import numpy as np
@@ -16,11 +17,14 @@ from copy import deepcopy
 from argparse import Namespace
 from gmm import GaussianMixture
 from mdn import MDN
+from utils.viz import *
+from utils.utils import snap
 
 
 def nll(pi_mu_sigma, y, reduce=True):
     pi, mu, sigma = pi_mu_sigma
     
+    # TODO this doesnt seem quite right
     # Make sure we only use non-zero sigmas
     mask = np.argwhere(sigma.detach().numpy().mean(axis=0) != 0).reshape(-1)
     pi = pi[:, mask]
@@ -92,93 +96,7 @@ def mdn(opt):
 def gmm(opt): 
     return GaussianMixture(opt.GMM_NUM_COMPONENTS)
 
-def viz_learning_curve(frames, polarity=''):
-    """ plot learning curve """
-    iter = np.array([i.iter_num for i in frames])
-    loss = np.array([i.loss for i in frames])
-    plt.plot(iter, loss, label=polarity)
-    plt.savefig(f'{opt.FIGPATH}/{polarity}_lc.png')
-    plt.close()
-
-def viz_marginal(model, dgp, polarity=''):
-    """ show marginal distribution """
-    n = int(opt.N_VIZ)
-    inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
-    orig = dgp(opt.SWEEP(n), n).view(-1).numpy()
-
-    pi, mu, sigma = model(inp)
-    mixture = torch.distributions.Normal(loc=mu, scale=sigma)
-    pred_vals = mixture.sample().numpy()
-    pi_np = pi.numpy()
-    pi_np = pi_np / np.sum(pi_np, axis=1, keepdims=True)
-    pred = [np.random.choice(pred_vals[i, :], p=pi_np[i, :]) 
-            for i in range(len(pred_vals))]
-
-    sns.kdeplot(x=orig, label='original')
-    sns.kdeplot(x=pred, label='predicted')
-    plt.legend()
-    plt.title('Marginal Distribution - ' + polarity)
-    plt.savefig(f'{opt.FIGPATH}/{polarity}_marginal')
-    plt.close()
-
-def viz_cond(model, polarity, actual=None, name=''):
-    """ show generative distributions before transfer """
-    n = int(opt.N_VIZ)
-    inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
-
-    with torch.no_grad():
-        pi, mu, sigma = model(inp)
-    mixture = torch.distributions.Normal(loc=mu, scale=sigma)
-
-    pred_vals = mixture.sample().numpy()
-    pi_np = pi.numpy()
-    pi_np = pi_np / np.sum(pi_np, axis=1, keepdims=True)
-    pred = [np.random.choice(pred_vals[i, :], p=pi_np[i, :]) 
-            for i in range(len(pred_vals))]
-
-    plt.scatter(inp.numpy(), pred, s=.2)
-    plt.title(polarity)
-    plt.xlabel('input')
-    plt.ylabel('prediction')
-    plt.xlim((-10, 10))
-    plt.ylim((-10, 10))
-    plt.title('Conditional Distribution')
-    plt.savefig(f'{opt.FIGPATH}/{name}{polarity}_cond.png')
-    plt.close()
-
-def viz_cond_separate(model, polarity='', name=''):
-    """ show generative distributions before transfer """
-    n = int(opt.N_VIZ)
-    inp = torch.FloatTensor(n).uniform_(-10, 10).view(-1, 1)
-    with torch.no_grad():
-        pi, mu, sigma = model(inp)
-    # mu
-    for i in range(mu.shape[1]):
-        rgba_colors = np.zeros((len(inp), 4))
-        rgba_colors[:, 0:3] = colors.to_rgb('C'+str(i))
-        rgba_colors[:, 3] = pi[:, i]
-        plt.scatter(inp, mu[:, i], color=rgba_colors, s=.3, label=str(i))
-    plt.xlim((-10, 10))
-    plt.ylim((-10, 10))
-    plt.legend(markerscale=5)
-    plt.title(polarity)
-    plt.savefig(f'{opt.FIGPATH}/{name}{polarity}_cond_mu.png')
-    plt.close()
-    # sigma
-    for i in range(sigma.shape[1]):
-        rgba_colors = np.zeros((len(inp), 4))
-        rgba_colors[:, 0:3] = colors.to_rgb('C'+str(i))
-        rgba_colors[:, 3] = pi[:, i]
-        plt.scatter(inp, sigma[:, i], color=rgba_colors, s=.3, label=str(i))
-    plt.xlim((-10, 10))
-    plt.ylim((-10, 10))
-    plt.legend(markerscale=5)
-    plt.title(polarity)
-    plt.savefig(f'{opt.FIGPATH}/{name}{polarity}_cond_sigma.png')
-    plt.close()
-
 def polarity_hlp(polarity, X, Y):
-
     if opt.NOISE_X:
         N = len(X)
         X = X + torch.normal(torch.zeros(N), torch.ones(N)).view(-1, 1)*opt.NOISE_X
@@ -266,67 +184,14 @@ def train_transfer(opt, model, scm,  polarity):
     print(f'TRANS {polarity.upper()}\t NLL conditional: {nll_cond}\t NLL marginal: {nll_marg}\t NLL TOTAL: {nll_cond+nll_marg}')
     return marginal, res
 
-def viz_transfer(x2y_df, y2x_df):
-    """ Compare transfer regret for competing models """
-    x2y_df['loss'] = x2y_df['nll_cond'] + x2y_df['nll_marg']
-    y2x_df['loss'] = y2x_df['nll_cond'] + y2x_df['nll_marg']
-    
-    # # loss components
-    sns.lineplot(data=x2y_df, x='iter', y='nll_cond', label='x2y_cond')
-    sns.lineplot(data=y2x_df, x='iter', y='nll_cond', label='y2x_cond')
-    sns.lineplot(data=x2y_df, x='iter', y='nll_marg', label='x2y_marg')
-    sns.lineplot(data=y2x_df, x='iter', y='nll_marg', label='y2x_marg')
-
-    sns.lineplot(data=x2y_df, x='iter', y='loss', label='x2y')
-    sns.lineplot(data=y2x_df, x='iter', y='loss', label='y2x')
-    plt.title('Transfer Learning Adaptation')
-    plt.ylabel('nll')
-    plt.savefig(f'{opt.FIGPATH}/0transfer.png')
-    plt.close()
-
-def viz_dgp(scm, polarity):
-    """ Visualize data-generating process """
-    plt.figure(figsize=(9, 5))
-    ax = plt.subplot(1, 1, 1)
-    mus = [-opt.SPAN, opt.SPAN, 0]
-    colors = ['C3', 'C2', 'C0']
-    labels = [r'Transfer ($\mu = -4$)', r'Transfer ($\mu = +4$)', 'Training']
-
-    for mu, color, label in zip(mus, colors, labels):
-        X = mu + 2 * torch.randn((1000, 1))
-        kwargs = {'color': color, 'marker': '+', 'alpha': 0.3, 'label': label}
-        if polarity == 'x2y':
-            ax.scatter(X.squeeze(1).numpy(), scm(X).squeeze(1).numpy(), **kwargs)
-        else:
-            ax.scatter(scm(X).squeeze(1).numpy(), X.squeeze(1).numpy(),
-            **kwargs)
-
-    ax.tick_params(axis='both', which='major', labelsize=13)
-    ax.legend(loc=4, prop={'size': 13})
-    ax.set_xlabel(polarity[0].upper(), fontsize=14)
-    ax.set_ylabel(polarity[-1].upper(), fontsize=14)
-    plt.title('Data Generating Process')
-    plt.savefig(f'{opt.FIGPATH}/{polarity}_data.png')
-    plt.close()
-
 def normal(mean, std, N): 
     return torch.normal(torch.ones(N).mul_(mean),
                         torch.ones(N).mul_(std)).view(-1, 1)
 
-def snap(opt):
-    exp_dir = os.path.join('src', 'transfer', 'experiments') 
-    if not os.path.exists(exp_dir):
-        os.mkdir(exp_dir)
-    fig_path = os.path.join(exp_dir,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    os.mkdir(fig_path)
-    opt.FIGPATH = fig_path
-    with open(os.path.join(opt.FIGPATH, 'options.txt'), 'w') as f:
-        f.write(str(opt))
-
 
 if __name__ == "__main__":
     opt = Namespace()
+    opt.exp_dir = os.path.join('src', 'transfer', 'experiments') 
     opt.N_VIZ = 1e3
     # DGP
     opt.v_structure = True
@@ -373,38 +238,38 @@ if __name__ == "__main__":
         order=opt.ORDER, 
         range_scale=opt.SCALE
     )
-    viz_dgp(scm, 'x2y')
-    viz_dgp(scm, 'y2x')
+    viz_dgp(opt, scm, 'x2y')
+    viz_dgp(opt, scm, 'y2x')
     # models
     model_x2y = mdn(opt)
     model_y2x = mdn(opt)
-    viz_cond_separate(model_x2y, polarity='x2y', name='PRE_')
-    viz_cond(model_x2y, polarity='x2y', name='PRE_')
-    viz_cond_separate(model_y2x, polarity='y2x', name='PRE_')
-    viz_cond(model_y2x, polarity='y2x', name='PRE_')
+    viz_cond_separate(opt, model_x2y, polarity='x2y', name='PRE_')
+    viz_cond(opt, model_x2y, polarity='x2y', name='PRE_')
+    viz_cond_separate(opt, model_y2x, polarity='y2x', name='PRE_')
+    viz_cond(opt, model_y2x, polarity='y2x', name='PRE_')
     # causal conditional
     frames_x2y = train_nll(opt, model_x2y, scm, opt.TRAIN_DISTR,
         polarity='x2y', loss_fn=nll)
     # anti-causal conditional
     frames_y2x = train_nll(opt, model_y2x, scm, opt.TRAIN_DISTR,
         polarity='y2x', loss_fn=nll)
-    viz_learning_curve(frames_x2y, polarity='x2y')
-    viz_cond_separate(model_x2y, polarity='x2y', name='TRAIN_')
-    viz_cond(model_x2y, polarity='x2y', name='TRAIN_')
-    viz_learning_curve(frames_y2x, polarity='y2x')
-    viz_cond_separate(model_y2x, polarity='y2x', name='TRAIN_')
-    viz_cond(model_y2x, polarity='y2x', name='TRAIN_')
+    viz_learning_curve(opt, frames_x2y, polarity='x2y')
+    viz_cond_separate(opt, model_x2y, polarity='x2y', name='TRAIN_')
+    viz_cond(opt, model_x2y, polarity='x2y', name='TRAIN_')
+    viz_learning_curve(opt, frames_y2x, polarity='y2x')
+    viz_cond_separate(opt, model_y2x, polarity='y2x', name='TRAIN_')
+    viz_cond(opt, model_y2x, polarity='y2x', name='TRAIN_')
     # transfer
     x2y_marginal, x2y_res = train_transfer(opt, model_x2y, scm, 'x2y')
     y2x_marginal, y2x_res = train_transfer(opt, model_y2x, scm, 'y2x')
-    viz_cond(model_x2y, polarity='x2y', name='TRANS_')
-    viz_cond(model_y2x, polarity='y2x', name='TRANS_')
-    viz_cond_separate(model_x2y, polarity='x2y', name='TRANS_')
-    viz_cond_separate(model_y2x, polarity='y2x', name='TRANS_')
+    viz_cond(opt, model_x2y, polarity='x2y', name='TRANS_')
+    viz_cond(opt, model_y2x, polarity='y2x', name='TRANS_')
+    viz_cond_separate(opt, model_x2y, polarity='x2y', name='TRANS_')
+    viz_cond_separate(opt, model_y2x, polarity='y2x', name='TRANS_')
 
     # viz marginals
-    viz_marginal(x2y_marginal, opt.TRANS_DISTR, polarity=f'x2y')
-    viz_marginal(y2x_marginal, lambda i, n: scm(opt.TRANS_DISTR(i, n)), polarity=f'y2x')
+    viz_marginal(opt, x2y_marginal, opt.TRANS_DISTR, polarity=f'x2y')
+    viz_marginal(opt, y2x_marginal, lambda i, n: scm(opt.TRANS_DISTR(i, n)), polarity=f'y2x')
 
     # viz transfer learning
-    viz_transfer(pd.DataFrame(x2y_res), pd.DataFrame(y2x_res))
+    viz_transfer(opt, pd.DataFrame(x2y_res), pd.DataFrame(y2x_res))

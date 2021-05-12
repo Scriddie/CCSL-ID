@@ -35,26 +35,3 @@ class GMM(nn.Module):
         return (F.softmax(self.pi, dim=-1).expand(like.shape[0], self.pi.shape[-1]),
                 self.mu.repeat(like.shape[0], 1),
                 torch.exp(self.sigma).expand(like.shape[0], self.sigma.shape[-1]))
-
-
-def mdn_nll(pi_mu_sigma, y, reduce=True):
-    pi, mu, sigma = pi_mu_sigma
-    m = torch.distributions.Normal(loc=mu, scale=sigma)
-    log_prob_y = m.log_prob(y)
-    log_prob_pi_y = log_prob_y + torch.log(pi)
-    loss = -torch.logsumexp(log_prob_pi_y, dim=1)
-    if reduce:
-        return torch.mean(loss)
-    else:
-        return loss
-
-def _legacy_mdn_nll(pi_mu_sigma, y, reduce=True):
-    pi, mu, sigma = pi_mu_sigma
-    m = torch.distributions.Normal(loc=mu, scale=sigma)
-    loss = torch.exp(m.log_prob(y))
-    loss = torch.sum(loss * pi, dim=1)
-    loss = -torch.log(loss)
-    if reduce:
-        return torch.mean(loss)
-    else:
-        return loss
