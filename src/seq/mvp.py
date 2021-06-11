@@ -5,99 +5,237 @@
 """
 
 import sys
+
 sys.path.append(sys.path[0]+'/..')
 import numpy as np
 import pandas as pd
 import torch
 import os
-from argparse import Namespace
-from utils.utils import snap
-from transfer.mdn import MDN
 from transfer.gmm import GaussianMixture
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
 
-# TODO this needs to become the likelihood of the entire model somehow!!!
-# it's just the cnditional at this point...
-# I need to predict both ways, just not provide all the inputs 
-# plus filter out interventional at the end!
+
+class MDN(nn.Module):
+    def __init__(self, n_in, n_hidden, n_gaussians):
+        super(MDN, self).__init__()
+
+        # gumbel matrix needs to be part of params!
+        self.mat = GumbelAdjacency(n_in)
+
+        self.z_h = nn.Sequential(
+            nn.Linear(n_in, n_hidden),
+            nn.Tanh()
+        )
+        self.z_pi = nn.Linear(n_hidden, n_gaussians)
+        self.z_mu = nn.Linear(n_hidden, n_gaussians)
+        self.z_sigma = nn.Linear(n_hidden, n_gaussians)
+        self.d = n_in
+
+    # TODO make multi-dimensional
+    def forward(self, x, var_idx, mask=None):
+        """ predict x from variables in parent column """
+        # build interventional graph
+        if mask is None:
+            mask = torch.ones(x.shape[0]).reshape(-1, 1)
+        # gumbel
+        M = self.mat.forward(x.shape[0]) 
+        parents = M[:, :, var_idx]
+        x = x * parents * mask
+        # prediction
+        z_h = self.z_h(x)
+        pi = F.softmax(self.z_pi(z_h), -1)
+        mu = self.z_mu(z_h)
+        sigma = torch.exp(self.z_sigma(z_h))
+        return pi, mu, sigma
+
+
+
+
+#-----------------------Gumbel START----------------------------------
+import torch
+import numpy as np
+from scipy.linalg import expm
+
+def sample_logistic(shape, uniform):
+    u = uniform.sample(shape)
+    return torch.log(u) - torch.log(1 - u)
+
+def gumbel_sigmoid(log_alpha, uniform, bs, tau=1, hard=False):
+    shape = tuple([bs] + list(log_alpha.size()))
+    logistic_noise = sample_logistic(shape, uniform)
+    y_soft = torch.sigmoid((log_alpha + logistic_noise) / tau)
+    if hard:
+        y_hard = (y_soft > 0.5).type(torch.Tensor)
+        # forward: we get a hard sample; backward: differentiate gumbel sigmoid
+        y = y_hard.detach() - y_soft.detach() + y_soft
+    else:
+        y = y_soft
+
+    return y
+
+
+class TrExpScipy(torch.autograd.Function):
+    """
+    autograd.Function to compute trace of an exponential of a matrix
+    """
+
+    @staticmethod
+    def forward(ctx, input):
+        with torch.no_grad():
+            # send tensor to cpu in numpy format and compute expm using scipy
+            expm_input = expm(input.detach().cpu().numpy())
+            # transform back into a tensor
+            expm_input = torch.as_tensor(expm_input)
+            if input.is_cuda:
+                # expm_input = expm_input.cuda()
+                assert expm_input.is_cuda
+            # save expm_input to use in backward
+            ctx.save_for_backward(expm_input)
+
+            # return the trace
+            return torch.trace(expm_input)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        with torch.no_grad():
+            expm_input, = ctx.saved_tensors
+            return expm_input.t() * grad_output
+
+
+def compute_dag_constraint(w_adj):
+    """
+    Compute the DAG constraint of w_adj
+    :param np.ndarray w_adj: the weighted adjacency matrix (each entry in [0,1])
+    """
+    assert (w_adj >= 0).detach().cpu().numpy().all()
+    h = TrExpScipy.apply(w_adj) - w_adj.shape[0]
+    return h
+
+
+def is_acyclic(adjacency):
+    """
+    Return true if adjacency is a acyclic
+    :param np.ndarray adjacency: adjacency matrix
+    """
+    prod = np.eye(adjacency.shape[0])
+    for _ in range(1, adjacency.shape[0] + 1):
+        prod = np.matmul(adjacency, prod)
+        if np.trace(prod) != 0: return False
+    return True
+
+
+class GumbelAdjacency(torch.nn.Module):
+    """
+    Random matrix M used for the mask. Can sample a matrix and backpropagate using the
+    Gumbel straigth-through estimator.
+    :param int num_vars: number of variables
+    """
+    def __init__(self, num_vars):
+        super(GumbelAdjacency, self).__init__()
+        self.num_vars = num_vars
+        self.log_alpha = torch.nn.Parameter(torch.zeros((num_vars, num_vars)))
+        self.uniform = torch.distributions.uniform.Uniform(0, 1)
+        self.reset_parameters()
+
+    def forward(self, bs, tau=1, drawhard=True):
+        adj = gumbel_sigmoid(self.log_alpha, self.uniform, bs, tau=tau, hard=drawhard) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
+        return adj
+
+    def get_proba(self):
+        """Returns probability of getting one"""
+        return torch.sigmoid(self.log_alpha) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
+
+    def reset_parameters(self):
+        torch.nn.init.constant_(self.log_alpha, 5.)
+
+#--------------------------------Gumbel END-------------------------------
+
+
+
 # TODO walk through this once more!
-def nll(pi_mu_sigma, y, mask):
+def nll(pi, mu, sigma, y, mask=None):
     """ Conditional NLL of a single variable """
-    pi, mu, sigma = pi_mu_sigma
+    if pi is None:
+        pi = torch.ones(size=mu.shape[0])
     m = torch.distributions.Normal(loc=mu, scale=sigma+torch.tensor(1e-6))
-    log_prob_y = m.log_prob(y)
+    log_prob_y = m.log_prob(y.reshape(-1, 1))
     log_prob_pi_y = log_prob_y + torch.log(pi)
     loss = -torch.logsumexp(log_prob_pi_y, dim=1)
-    loss = loss * mask
-    return torch.mean(loss)
+    return torch.sum(loss)
 
 
 def read(opt):
     """ read in data """
+    dag = np.load(os.path.join(opt.data_dir, 'DAG1.npy'))
     data = pd.read_csv(os.path.join(opt.data_dir, 'data_interv1.csv'))
-    interventions = pd.read_csv(os.path.join(opt.data_dir, 'intervention1.csv'), header=None)
     mask = np.ones(data.shape)
-    for idx, val in enumerate(interventions):
-        mask[idx, val] = 0
+    # TODO check this is right!
+    try:  # works if there were any interventions
+        interventions = pd.read_csv(os.path.join(opt.data_dir, 'intervention1.csv'), header=None)
+        for idx, val in enumerate(interventions.values.reshape(-1)):
+            mask[idx, val] = 0
+    except:
+        print('Warning: No interventions found')
     mask = pd.DataFrame(mask, columns=data.columns)
     regimes = pd.read_csv(os.path.join(opt.data_dir, 'regime1.csv'), header=None)
-    return data, mask, regimes
+    return dag, data, mask, regimes
 
+def mdn_nll(X, model, mask):
+    d = X.shape[1]
+    losses = torch.zeros(d)
+    if mask is not None:
+        mask = (mask > 0).values.squeeze()
+    for i in range(d):
+        pi_mu_sigma = model.forward(X, var_idx=i)
+        pi, mu, sigma = pi_mu_sigma
+        y = X[:, i]
+        if mask is not None:
+            var_mask = mask[:, i]
+            pi = pi[var_mask]
+            mu = mu[var_mask]
+            sigma = sigma[var_mask]
+            y = y[var_mask]
+        losses[i] = nll(pi, mu, sigma, y)
+    loss = losses.sum()
+    return loss
 
-def train_nll(opt, model, df, x_name, y_name, mask):
+# TODO make this a multi-way prediction (aka. replicate DCDI)
+# TODO make modular enough so we can do the same as DCDI as well!
+def train_nll(opt, model, df, W, mask, loss_fn):
     """ 
     Train model in a given direction.
     For now only bivariate case!
     For now, no interventions yet!
     """
-    X = torch.Tensor(df[x_name].values).unsqueeze(1)
-    Y = torch.Tensor(df[y_name].values).unsqueeze(1)
-    MX = torch.Tensor(mask[x_name].values).unsqueeze(1)
-    MY = torch.Tensor(mask[y_name].values).unsqueeze(1)
-    # marginal
-    marginal = GaussianMixture(opt.GMM_NUM_COMPONENTS)
-    marginal.fit(X)
-    nll_marg = nll(marginal(X), X, MX).item()
-    # conditional
+    X = torch.Tensor(df.values)
+    W = torch.Tensor(W)
+
+    # # marginal
+    # X_marginal = torch.Tensor(df[x_name].values).unsqueeze(1)
+    # marginal = GaussianMixture(opt.GMM_NUM_COMPONENTS)
+    # marginal.fit(X_marginal)
+    # nll_marg = nll(marginal(X_marginal), X_marginal, MX).item()
+
     optim = torch.optim.Adam(model.parameters(), lr=opt.LR)
     log = {'conditional': [], 'marginal': [], 'iter': []}
     for i in range(opt.ITER):
-        nll_cond = nll(model(X), Y, MY)
-        optim.zero_grad()
+        optim.zero_grad() 
+        nll_cond = loss_fn(X, model, mask)
         nll_cond.backward()
         optim.step()
         nll_cond = nll_cond.item()
         if (i % opt.REC_FREQ == 0) or (i == (opt.ITER - 1)):
             log['conditional'].append(nll_cond)
-            log['marginal'].append(nll_marg)
+            # log['marginal'].append(nll_marg)
             log['iter'].append(i)
-            print(f'{x_name} -> {y_name}\t NLL conditional: {nll_cond}\t NLL marginal: {nll_marg}\t NLL TOTAL: {nll_cond+nll_marg}')
+            print(f' NLL conditional: {nll_cond}\t'
+                # + f'NLL marginal: {nll_marg}\t'
+                # + f'NLL TOTAL: {nll_cond+nll_marg}'
+                )
+            print(model.mat.get_proba().detach().numpy())
     print()
     return log
-
-
-if __name__ == '__main__':
-    opt = Namespace()
-    opt.data_dir = os.path.join('src', 'dcdi', 'data', 'custom_data', 'sachs')
-    opt.exp_dir = os.path.join('src', 'seq', 'experiments')
-    opt.GMM_NUM_COMPONENTS = 5
-    # MDN
-    opt.n_hidden = 16
-    opt.n_gaussians = 8
-    # training
-    opt.ITER = 5000
-    opt.REC_FREQ = 1000
-    opt.LR = 5e-3
-    # save opt
-    snap(opt)
-
-    # data and model
-    data, mask, regimes = read(opt)
-    model = MDN(opt.n_hidden, opt.n_gaussians)
-
-    # train X -> Y
-    log = train_nll(opt, model, data, 'PKA', 'RAF', mask)
-
-    # train Y -> X
-    log = train_nll(opt, model, data, 'RAF', 'PKA', mask)
-
