@@ -266,6 +266,10 @@ With output noise, the conditional loss of y2x seems to be a lot lower. Not anym
     \item For equal additive noise on both variables, the direction is determined by the scale. The variable with the wider scale will have more transfer change in the marginal and less change in the conditional.
     \item For equal scale, the direction is determined by the additive noise. With additive noise on Y, x2y is less likely than y2x, resulting in higher regret and better final fit of the conditional for y2x
     \item We assume that the root cause has the same variance as the additive components after. Does that really make sense?
+    \item There is this spike in the middle of the parable. So gumbel softmax solves some problems of the network compensating (as they promise) but it does introduce some others.
+    \item There is really no reason to believe there is such a thing as a root cause. The root cause distributional assumption is killing us :/
+    \item Should we standardize everything that hasn't been intervened upon jointly? This standardization stuff is killing me. Why does it even work the way it is??
+    \item Should I use the standardization as proposed by me? or should I use a separate network for every dataset?
 \end{itemize}
 
 \begin{figure}[H]

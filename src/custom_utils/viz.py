@@ -9,7 +9,6 @@ from pathlib import Path
 from networkx.drawing.nx_agraph import graphviz_layout
 from argparse import Namespace
 
-
 # -------------------MDN START------------------------------
 
 def viz_marginal(opt, model, dgp, polarity=''):
@@ -162,6 +161,8 @@ def learning(opt, log):
         assert i in log.keys()
     d = list(range(len(log['losses'][0])))
     var_cols = [str(i) for i in d]
+
+    # visualize fit
     df = pd.concat((pd.DataFrame(log['losses'], columns=var_cols), pd.DataFrame(log['iter'], columns=['iter'])), axis=1)
     # TODO melt df
     melted = pd.melt(df, id_vars=['iter'], value_vars=var_cols, value_name='NLL')
@@ -169,15 +170,54 @@ def learning(opt, log):
     plt.savefig(opt.exp_dir + '/lc.png')
     plt.close('all')
 
-# TODO can we re-purpose our show_marginal??
-def model_fit(model):
+    # visualize matrix
+    var_cols = [str(i) for i in range(len(d)**2)]
+    df = pd.concat((pd.DataFrame([np.ravel(i) for i in log['mat']], columns=var_cols), pd.DataFrame(log['iter'], columns=['iter'])), axis=1)
+    # TODO melt df
+    melted = pd.melt(df, id_vars=['iter'], value_vars=var_cols, value_name='Edge')
+    sns.lineplot(data=melted, x='iter', y='Edge', hue='variable')
+    plt.savefig(opt.exp_dir + '/mat.png')
+    plt.close('all')
+
+def model_fit(opt, model, X):
     """ viz function fit by model """
+    d = X.shape[1]
     # some uniform
-    input = torch.tensor(np.linspace(-2, 2, 1000))
+    input = torch.tensor(np.concatenate(
+        tuple([np.linspace(-3., 3., 10000).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
     # forward through model
-    output = model.forward(input)
+    with torch.no_grad():
+        output = model.forward(input, nomask=True)
     # plot
-    pass
+    fig, ax = plt.subplots(ncols=d, nrows=1)
+    for idx, i in enumerate(output):
+        sns.scatterplot(x=input[:, idx].ravel(), y=i.numpy().ravel(), ax=ax[idx], label='model', color='blue', s=1)
+        ax[idx].legend()
+    plt.tight_layout()
+    plt.savefig(opt.exp_dir + '/fit.png')
+    plt.close('all')
+
+def conditionals(opt, model, X):
+    """ viz function fit by model """
+    d = X.shape[1]
+    # some uniform
+    input = torch.zeros_like(X).uniform_(-2, 2)
+    # forward through model
+    with torch.no_grad():
+        output = model.forward(input)
+    # plot
+    fig, ax = plt.subplots(ncols=d, nrows=1)
+    for idx, i in enumerate(output):
+        sns.kdeplot(data=X[:, idx], ax=ax[idx], label='gt', color='blue')
+        sns.kdeplot(data=i.numpy(), ax=ax[idx], label='fit', color='orange')
+        ax[idx].legend()
+    plt.savefig(opt.exp_dir + '/dist.png')
+    plt.close('all')
+
+def bivariate(opt, X):
+    sns.scatterplot(X[:, 0], X[:, 1])
+    plt.savefig(opt.exp_dir + '/bivariate.png')
+    plt.close('all')
 # -------------------SEQ END------------------------------
 
 

@@ -64,7 +64,6 @@ class BaseMLP(nn.Module):
                 out_dim = self.num_params
 
             # generate one MLP per conditional
-            # TODO initialize explicitly! these should kinda change, tho
             self.weights.append(nn.Parameter(torch.zeros(self.d, out_dim, in_dim)))
             self.biases.append(nn.Parameter(torch.zeros(self.d, out_dim)))
             self.numel_weights += self.d * out_dim * in_dim
@@ -73,7 +72,7 @@ class BaseMLP(nn.Module):
     def get_interv_w(self, bs, regime):
         return self.gumbel_interv_w(bs, regime)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, nomask=False):
         # TODO we are not using get_weights for now
         weights = self.weights
         biases = self.biases
@@ -93,6 +92,8 @@ class BaseMLP(nn.Module):
             if layer == 0:
                 # sample the matrix M that will be applied as a mask at the MLP input
                 M = self.gumbel_adjacency(bs)
+                if nomask:  # get unmasked predictions
+                    M = torch.ones_like(M)
                 adj = self.adjacency.unsqueeze(0)
 
                 if not self.intervention:

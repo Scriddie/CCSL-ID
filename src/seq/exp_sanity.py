@@ -18,19 +18,17 @@ def get_opt():
     # plotting
     opt.plot_freq = 500
     # dirs
-    opt.data_dir = os.path.join('src', 'seq', 'data', 'root_cause_exp')
-    opt.exp_dir = os.path.join(opt.data_dir, 'exp') # os.path.join('src', 'seq', 'experiments')
-    opt.GMM_NUM_COMPONENTS = 5
-    # MDN
+    opt.data_dir = os.path.join('src', 'seq', 'data', 'obs_intervA_hard-joint')
+    opt.exp_dir = os.path.join(opt.data_dir, 'exp')
+    # network
     opt.n_in = 2
     opt.n_hidden = 16
-    opt.n_gaussians = 3
     # training
     opt.ITER = 10000
     opt.REC_FREQ = opt.ITER/20
     opt.LR = 1e-3
-    opt.mu_init = 1e-4
-    opt.gamma_init = 1e-4
+    opt.mu_init = 1e-5
+    opt.gamma_init = 1e-5
     opt.h_threshold = 1e-2
     opt.omega_gamma = 1e-3  # Precision to declare convergence of subproblems
     opt.omega_mu = 0.9  # Desired reduction in constraint violation
@@ -47,32 +45,29 @@ if __name__ == '__main__':
     # data and model
     dag, data, mask, regimes = mvp.read(opt)
 
+    # plot data
+    viz.bivariate(opt, data.values)
+
     # train
     model = BaseMLP.BaseMLP(
         d=opt.n_in,
         num_layers=2, 
         hid_dim=opt.n_hidden, 
-        num_params=1)
+        num_params=1,
+        intervention=True
+    )
     log = mvp.train_nll(opt, model, data, dag, mask, loss_fn=mvp.gauss_nll)
     
     # save log
     with open(f'{opt.exp_dir}/log.pk', 'wb') as f:
         pk.dump(log, f)
-
-    # save learning curves for individual variables
-    with open(f'{opt.exp_dir}/log.pk', 'rb') as f:
-        log = pk.load(f)
-    viz.learning(opt, log)
     
-    # TODO show function fit by NN
-    # viz.model_fit(model)
-
-    # TODO show fits of marginal/conditional 
-
-    # # causal model evaluation on sample
+    # TODO causal model evaluation on sample
     # gauss_nll(data, dag, lambda x: x**2)
     # # anti-causal model evaluation on sample
     # analytic(data, dag.T, lambda x: 1/x)
 
 # TODO big problem? standardization required for fair comparison of marginals.
-# BUT: standardization forces overlap in different value ranges???
+# BUT: standardization results in overlap in different value ranges???
+
+# TODO why does intervB not work???

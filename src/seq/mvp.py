@@ -189,7 +189,7 @@ def gauss_nll(X, model, mask):
                 scale=torch.ones_like(mu))
             log_prob_y = Dist.log_prob(y.reshape(-1, 1))
             loss = -torch.logsumexp(log_prob_y, dim=1)
-            losses[:, i] = loss
+            losses[:len(loss), i] = loss
         # estimate conditional pi, mu, sigma
         elif density_params[0].shape[1] == 3:
             pi, mu, sigma = density_params[i]
@@ -322,13 +322,15 @@ def train_nll(opt, model, df, W, mask, loss_fn):
                 # + f'NLL marginal: {nll_marg}\t'
                 # + f'NLL TOTAL: {aug_lagrangian+nll_marg}'
                 )
-            mat = model.gumbel_adjacency.get_proba().detach().numpy()
+            mat = model.gumbel_adjacency.get_proba().detach().squeeze(0).numpy()
             print(mat)
             log['mat'].append(mat)
 
         # viz progress
         if i % opt.plot_freq == 0:
             viz.learning(opt, log)
+            viz.conditionals(opt, model, X)
+            viz.model_fit(opt, model, X)
 
     print()
     return log
