@@ -26,7 +26,19 @@ def generate(opt):
     dataset = dg.create_data(description, opt.W_true)
     return dataset.data
 
-def create_dataset(opt, targets=[]):
+def generate_nonlinear(opt):
+    """ 
+    just generate x**2 for now, could go for the nonlinear noise types later
+    """
+    assert opt.n_nodes == 2  # crappy implementation for now
+    x = np.zeros((opt.n_obs, opt.n_nodes))
+    x[:, 0] = np.random.exponential(1.5, opt.n_obs)
+    x[:, 1] = x[:, 0]**2 + np.random.normal(0, np.random.uniform(*opt.noise_variance), opt.n_obs)
+    return x
+
+
+def create_dataset(opt, targets=[], linear=True):
+    gen = generate if linear else generate_nonlinear
     utils.overwrite_folder(opt.exp_dir)
 
     # int data
@@ -35,15 +47,15 @@ def create_dataset(opt, targets=[]):
     for i in targets:
         if sum(opt.W_true[:, i]) == 0:  # root cause
             # adjust params a bit? use some wrong noise etc.?
-            temp = generate(opt)
+            temp = gen(opt)
             int_data.append(np.copy(temp))  # do the usual thing
         else:  # effect node
-            temp = generate(opt)
+            temp = gen(opt)
             temp[:, i] = np.random.normal(0, 1, opt.n_obs)
             int_data.append(np.copy(temp))
 
     # obs data
-    obs1 = generate(opt)
+    obs1 = gen(opt)
     obs_data = [obs1]
 
     # standardize
@@ -117,11 +129,11 @@ def inspect(base_dir):
 if __name__ == "__main__":
     opt = Namespace()
     # files
-    opt.exp_name = "sanity"
+    opt.exp_name = "root_cause_exp"
     opt.exp_dir = "src/seq/data/" + opt.exp_name
     # data
     opt.noise = 'gauss'
-    opt.noise_variance = (1, 1)
+    opt.noise_variance = (.1, .1)
     opt.edge_weight_range = (1, 1)
     opt.W_true = np.array([[0, 1],
                            [0, 0]])
@@ -130,7 +142,7 @@ if __name__ == "__main__":
     opt.random_seed = 0
 
     # create dataset
-    create_dataset(opt, targets=[0])
+    create_dataset(opt, targets=[], linear=False)
 
     # make sure everything went right
     inspect(opt.exp_dir)

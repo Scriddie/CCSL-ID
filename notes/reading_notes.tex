@@ -8,6 +8,11 @@
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{pdfpages}
+\usepackage{cleveref}
+\usepackage{todonotes}
 \usepackage[
     doi=false,isbn=false,url=false,
     backend=biber,
@@ -260,6 +265,7 @@ With output noise, the conditional loss of y2x seems to be a lot lower. Not anym
     \item Evaluation data set needs to be large for consistent effects
     \item For equal additive noise on both variables, the direction is determined by the scale. The variable with the wider scale will have more transfer change in the marginal and less change in the conditional.
     \item For equal scale, the direction is determined by the additive noise. With additive noise on Y, x2y is less likely than y2x, resulting in higher regret and better final fit of the conditional for y2x
+    \item We assume that the root cause has the same variance as the additive components after. Does that really make sense?
 \end{itemize}
 
 \begin{figure}[H]
@@ -408,6 +414,137 @@ With output noise, the conditional loss of y2x seems to be a lot lower. Not anym
         \includegraphics[width=\linewidth]{../src/transfer/experiments/PKA_PRAF/comparison.png}
     \end{subfigure}
 \end{figure}
+
+
+\subsection{Assumptions Bivariate DCDI}
+
+Fundamentally there are two possible approaches to causal discovery using score-based models. We can either use a directional bias that allows for causal discovery even in the observational case, or we aim for score equivalence and make use of interventional data to distinguish between score equivalent models.
+
+\paragraph{Marginal Distribution}
+For any completely defined joint distribution we need to model the marginal distibution of root causes. Without a completely defined joint distribution, we can not reliably achieve score equivalence. However, once we specify the marginal, we can still only achieve score equivalence given the modeling assumptions are met. Score equivalence is a desirable property as it ensures that there is no bias toward picking a DAG from the MEC. We want only interventions, not any other biases to guide us to the DAG within the MEC. This intervention-only approach is motivated by the idea that we lack a justification for any other kind of directional bias. For linear models with standardized data, this is less of a problem.
+
+\paragraph{Transformation}
+Directional inference also relies on a model's ability to fit transformations similarly well in both directions. Again, the linear case is somewhat special here. If we have a constrained model, this will introduce a directional bias. With a sufficiently flexible model, we may be able to fit both directions equally well.
+
+\paragraph{$D_{obs}$ and $D_{int}$}
+Have to match our modeling assumptions. Notably, choosing an unsuitable interventional distribution can result in model misspecification.
+
+\paragraph{Number of Obs and Int Samples} can also be decisive for directional inference.
+
+\section{Formal Description}
+
+Let data be given as \\
+\begin{math}
+    \begin{pmatrix} 
+        a_{obs}^{(1)}\\
+        \dots\\
+        a_{obs}^{(n)}\\
+    \end{pmatrix}
+    % 
+    \quad\overset{f(x)}{\to}\quad
+    %
+    \begin{pmatrix} 
+        b_{obs}^{(1)}\\
+        \dots\\
+        b_{obs}^{(n)}\\
+    \end{pmatrix}
+    \\
+    \textcolor{gray}{
+        \begin{pmatrix} 
+            a_{int}^{(1)}\\
+            \dots\\
+            a_{int}^{(m)}\\
+        \end{pmatrix}
+    }
+    % 
+    \quad\overset{f(x)}{\to}\quad
+    % 
+    \begin{pmatrix} 
+        b_{int}^{(1)}\\
+        \dots\\
+        b_{int}^{(m)}\\
+    \end{pmatrix}\\
+\end{math}
+
+\noindent
+In this model, any $b = f(a) + N_b$ for corresponding $a$ and $b$. We observe the distributions $\mathcal{D}_{marg}^{a}, \mathcal{D}_{cond}^{b}, \mathcal{D}_{marg}^{a}, \mathcal{D}_{cond}^{b}$. In our causal model, we approximate $f(a)$ with $\widehat{f}(a)$, and any $\mathcal{D}$ with $\widehat{\mathcal{D}}$. With sample log-likelihoods $\mathbb{L}$ we can write the model score $\mathcal{S}$ as follows.\\
+
+\begin{math}
+    \mathcal{S}_{A \to B} = \mathbb{L}_{\widehat{\mathcal{D}}_{marg}}(a_{obs}) + 
+                  \mathbb{L}_{\widehat{\mathcal{D}}_{cond}}(\widehat{f}(a_{obs})) +
+                  \mathbb{L}_{\widehat{\mathcal{D}}_{cond}}(\widehat{f}(a_{int}))\\
+\end{math}
+
+\begin{math}
+    \mathcal{S}_{B \to A} = \mathbb{L}_{\widehat{\mathcal{D}}_{cond}}(\widehat{f}^{-1}(b_{obs})) + 
+                  \mathbb{L}_{\widehat{\mathcal{D}}_{marg}}(b_{obs}) +
+                  \mathbb{L}_{\widehat{\mathcal{D}}_{marg}}(b_{int})\\
+\end{math}
+
+\noindent
+\textbf{In the observational case} the direction depends entirely on the choice of marginal distribution, conditional distibution, and approximation of the transformation function.\\
+\textbf{In the interventional case} a choice between the models amounts to a comparison of estimating transformation and condition compared to estimating only a marginal.
+
+
+\section{Testing modelling assumptions}
+The following tests can be performed on real world data to assess whether a causal discovery method is well specified for the task. Assessing score equivalence requires correct specification of marginal densities, conditional densities, and the ability to fit transformations equally well in both directions. Score equivalence can not tested directly, as we do not know the true distributions or causal structure. However, it's components can be tested individually.
+
+\paragraph{Assumptions about marginal distributions} can be tested on the data. Each causal model will have to have at least one root cause, so there has to be at least one variable with a distribution matching the specification of the causal marginal distribution.
+
+\paragraph{Assumptions about transformations and conditional distributions} are entangled and can therefore not be tested directly. However, we know that any two-variable pair in the observational part of the data should be score-equivalent, which we can test for.
+
+\paragraph{Consistency in the presence of interventions} can also be tested. We propose a comparison of causal discovery results on different chunks of the data that are by themselves identifiable and should lead to the same causal model. One such example are two variables for which we have observational data and interventional data for each variable.
+
+\subsection{When can we expect score equivalence?}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|}
+        \textbf{Identifiable} & \textbf{Non-identifiabe}\\
+        \hline
+        SE void & Check SE\\
+    \end{tabular}
+\end{table}
+
+
+\subsection{Checking Model Assumptions}
+Can there be a case where interventional data flips the direction of causal inference? (as seen on the experimental data)
+
+Within these noise models, we distinguish identifiable and non-identifiable ones as $I$ and $\bar{I}$.
+For now we restrict ourselves to generic gaussian noise, but the argument can be extended to other distributions.
+Within the gaussian noise class, we distinguish between the linear kind (LANM) and the non-linear kind (NAMN).
+LAMNs are generally not identifiable, unless special conditions about the (conditional) variances hold \todo{cite Peters, Park, Reisach} and are built into the model. 
+NAMNs are identifiable by a joint gaussian model which can fit the class of nonlinear functions.
+Since the identifiability assumptions for LANMs are difficult to test, we assume a score that does not take them into account.
+For such a score, we can denote the set of all additive noise models as $C = (LAMN \in \bar{I}, NAMN \in I)$.
+
+We now consider the components to a causal graphical model which is a triple of (Class of marginal distributions, Class of conditional distributions, Class of transformations) formalized as $(\mathbb{D}_{marg}, \mathbb{D}_{cond}, \mathbb{F})$.
+
+A suitable score function should assign a an equal score for markov equivalent graphs.
+
+
+In a typical graphical model, the variables are sums of transformed values of their parent variables. For a structure learning algorithm to be able to recover the data generating graphical model, we thus need it to be able to fit the expression
+
+\begin{equation}
+    \widehat{\mathcal{D}}_{cond}(\sum_{p=1}^{n\_parents}\widehat{\mathcal{F}}(x^{(p)}), \sigma).
+    \label{eq:score}
+\end{equation}
+
+for arbitrary $\mathcal{D}_{marg} \in \mathbb{D}_{marg}, \mathcal{D}_{cond} \in \mathbb{D}_{cond}, \mathcal{F} \in \mathbb{F}$.
+In doing so, we assume that the summation of variables does not change their distribution, which implis that that $\mathbb{D}_{marg} = \mathbb{D}_{cond}$\todo{does it?}.
+Consider the following causal graphical model.
+\begin{figure}[H]
+    \centerline{\includegraphics[height=8.7em]{figures/confounder.png}}
+\end{figure}
+We let confounder $C$ model any common confounders, $P_A, P_B$ are any unknown parents of $A$ and $B$ respectively, and $M$ captures an unknown number of potential mediators. This generic scenario captures the choice of any two variables in a causal graph. We can see that again, each of A and B will be the sum of (potentially chained) transformations of parent variables. Crucially, the fact that some of these parents overlap should not impede our ability to fit the distribution \todo{can I argue this?}. Thus if we assume that our score can fit a generic variable of the form specified in \cref{eq:score}, it is also able to correcly fit any subgraph consisting of two nodes $A$ and $B$.
+
+% We can now write the densities of $A$ and $B$ as follows.
+% \begin{equation}
+%     \widehat{\mathcal{D}}_{cond}^A(\sum_{p=1}^{n\_parents}\widehat{\mathcal{F}}(x^{(p)}), \sigma) \\
+% \end{equation}
+
+
+\section{Code}
+\lstinputlisting{test.py}
 
 
 \clearpage

@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import networkx as nx
+import torch
 from pathlib import Path
 from networkx.drawing.nx_agraph import graphviz_layout
 from argparse import Namespace
@@ -152,6 +153,33 @@ def viz_cond_separate(opt, model, polarity='', name=''):
 
 
 # -------------------MDN END------------------------------
+
+
+# -------------------SEQ START----------------------------
+def learning(opt, log):
+    """ viz nll loss per variable during training """
+    for i in ['iter', 'losses', 'mat']:
+        assert i in log.keys()
+    d = list(range(len(log['losses'][0])))
+    var_cols = [str(i) for i in d]
+    df = pd.concat((pd.DataFrame(log['losses'], columns=var_cols), pd.DataFrame(log['iter'], columns=['iter'])), axis=1)
+    # TODO melt df
+    melted = pd.melt(df, id_vars=['iter'], value_vars=var_cols, value_name='NLL')
+    sns.lineplot(data=melted, x='iter', y='NLL', hue='variable')
+    plt.savefig(opt.exp_dir + '/lc.png')
+    plt.close('all')
+
+# TODO can we re-purpose our show_marginal??
+def model_fit(model):
+    """ viz function fit by model """
+    # some uniform
+    input = torch.tensor(np.linspace(-2, 2, 1000))
+    # forward through model
+    output = model.forward(input)
+    # plot
+    pass
+# -------------------SEQ END------------------------------
+
 
 
 # -------------------MISCELLANEOUS START ------------------------------
