@@ -7,7 +7,7 @@ from data_generation import *
 if __name__ == "__main__":
     opt = Namespace()
     # files
-    opt.exp_name = "obs_intervA_easy"
+    opt.exp_name = "obs_intervA_easy-joint"
     opt.exp_dir = "src/seq/data/" + opt.exp_name
     # data
     opt.noise = 'gauss'
@@ -19,7 +19,7 @@ if __name__ == "__main__":
     opt.n_nodes = len(opt.W_true)
     opt.n_obs = 10000
     opt.random_seed = 0
-    opt.standardize_individually = True
+    opt.standardize_individually = False
 
     # create dataset
     create_dataset(opt, obs=True, targets=[0], nonlinear=lambda x: x**2)

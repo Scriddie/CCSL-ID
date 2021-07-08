@@ -128,7 +128,7 @@ Observations
 
 % TODO: check if mean is in right place
 \begin{equation}
-    \underset{G}{\mathrm{argmax}} \quad \frac{1}{K} \sum_{k=1}^K \frac{1}{N} \sum_{i=1}^N \log(\tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}) - \lambda |G|
+    \underset{G}{\mathrm{argmax}} \quad \sum_{k=1}^K \frac{1}{N} \sum_{i=1}^N \log(\tilde{f}(x_j, NN(M_j \odot x, \phi^{(1)}))^{1-R_{kj}} \tilde{f}(x_j, NN(M_j \odot x, \phi^{(k)}))^{R_{kj}}) - \lambda |G|
 \end{equation}
 
 \subsubsection{Perfect Interventions}

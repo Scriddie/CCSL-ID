@@ -7,9 +7,7 @@ from seq.mvp import GumbelAdjacency
 
 
 class BaseMLP(nn.Module):
-    def __init__(self, d, num_layers, hid_dim, num_params, nonlin="leaky-relu",
-                 intervention=False, intervention_type="perfect",
-                 intervention_knowledge="known", num_regimes=1):
+    def __init__(self, d, num_layers, hid_dim, num_params, zombie_threshold,    nonlin="leaky-relu", intervention=False, intervention_type="perfect",intervention_knowledge="known", num_regimes=1):
         """
         :param int d: number of variables in the system
         :param int num_layers: number of hidden layers
@@ -32,6 +30,7 @@ class BaseMLP(nn.Module):
         self.intervention_type = intervention_type
         self.intervention_knowledge = intervention_knowledge
         self.num_regimes = num_regimes
+        self.zombie_threshold = zombie_threshold
 
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
@@ -87,14 +86,18 @@ class BaseMLP(nn.Module):
         bs = x.size(0)
         num_zero_weights = 0
 
+        # prevent zombie edges using adj
+        # TODO eliminate dead edges in acyclicity constraint as well!?
+        self.adjacency = torch.where(self.gumbel_adjacency.get_proba() < self.zombie_threshold, torch.zeros_like(self.adjacency), self.adjacency)
+
         for layer in range(self.num_layers + 1):
             # First layer, apply the mask
             if layer == 0:
                 # sample the matrix M that will be applied as a mask at the MLP input
+                adj = self.adjacency.unsqueeze(0)
                 M = self.gumbel_adjacency(bs)
                 if nomask:  # get unmasked predictions
                     M = torch.ones_like(M)
-                adj = self.adjacency.unsqueeze(0)
 
                 if not self.intervention:
                     x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], M, adj, x) + biases[layer]

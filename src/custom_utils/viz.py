@@ -155,28 +155,37 @@ def viz_cond_separate(opt, model, polarity='', name=''):
 
 
 # -------------------SEQ START----------------------------
-def learning(opt, log):
+def learning(opt, log, W_true):
     """ viz nll loss per variable during training """
     for i in ['iter', 'losses', 'mat']:
         assert i in log.keys()
     d = list(range(len(log['losses'][0])))
     var_cols = [str(i) for i in d]
 
-    # visualize fit
+    # fit
     df = pd.concat((pd.DataFrame(log['losses'], columns=var_cols), pd.DataFrame(log['iter'], columns=['iter'])), axis=1)
-    # TODO melt df
     melted = pd.melt(df, id_vars=['iter'], value_vars=var_cols, value_name='NLL')
     sns.lineplot(data=melted, x='iter', y='NLL', hue='variable')
-    plt.savefig(opt.exp_dir + '/lc.png')
+    plt.ylim(0, 5)
+    plt.savefig(opt.out_dir + '/lc.png')
     plt.close('all')
 
-    # visualize matrix
+    # edges
     var_cols = [str(i) for i in range(len(d)**2)]
-    df = pd.concat((pd.DataFrame([np.ravel(i) for i in log['mat']], columns=var_cols), pd.DataFrame(log['iter'], columns=['iter'])), axis=1)
-    # TODO melt df
-    melted = pd.melt(df, id_vars=['iter'], value_vars=var_cols, value_name='Edge')
-    sns.lineplot(data=melted, x='iter', y='Edge', hue='variable')
-    plt.savefig(opt.exp_dir + '/mat.png')
+    df = pd.concat((pd.DataFrame([np.ravel(i) for i in log['mat']], columns=var_cols), pd.DataFrame(log['iter'], columns=['Iteration'])), axis=1)
+    melted = pd.melt(df, id_vars=['Iteration'], value_vars=var_cols, value_name='Edge')
+    color_dict = {str(idx): 'green' if i!=0 else 'red' for idx, i in enumerate(W_true.flatten())}
+    # melted['edges'] = melted['variable'].replace(color_dict)
+    sns.lineplot(data=melted, x='Iteration', y='Edge', hue='variable', palette=color_dict)
+    plt.axhline(y=opt.zombie_threshold)
+    plt.legend('', frameon=False)
+    plt.savefig(opt.out_dir + '/edges.png')
+    plt.close('all')
+
+def mat(opt, mat):
+    """ adjacency matrix as heatmap """
+    sns.heatmap(mat)
+    plt.savefig(opt.out_dir+'/mat.png')
     plt.close('all')
 
 def model_fit(opt, model, X):
@@ -189,16 +198,17 @@ def model_fit(opt, model, X):
     with torch.no_grad():
         output = model.forward(input, nomask=True)
     # plot
-    fig, ax = plt.subplots(ncols=d, nrows=1)
+    fig, ax = plt.subplots(ncols=d, nrows=1, figsize=(12, 5))
     for idx, i in enumerate(output):
         sns.scatterplot(x=input[:, idx].ravel(), y=i.numpy().ravel(), ax=ax[idx], label='model', color='blue', s=1)
         ax[idx].legend()
-    plt.tight_layout()
-    plt.savefig(opt.exp_dir + '/fit.png')
+    plt.subplots_adjust(wspace=.1)
+    plt.savefig(opt.out_dir + '/fit.png')
     plt.close('all')
 
 def conditionals(opt, model, X):
     """ viz function fit by model """
+    # TODO don't plot the interventional data, won't have to be fit anyways!
     d = X.shape[1]
     # some uniform
     input = torch.zeros_like(X).uniform_(-2, 2)
@@ -206,17 +216,23 @@ def conditionals(opt, model, X):
     with torch.no_grad():
         output = model.forward(input)
     # plot
-    fig, ax = plt.subplots(ncols=d, nrows=1)
+    fig, ax = plt.subplots(ncols=d, nrows=1, figsize=(12, 5))
     for idx, i in enumerate(output):
         sns.kdeplot(data=X[:, idx], ax=ax[idx], label='gt', color='blue')
         sns.kdeplot(data=i.numpy(), ax=ax[idx], label='fit', color='orange')
         ax[idx].legend()
-    plt.savefig(opt.exp_dir + '/dist.png')
+    plt.subplots_adjust(wspace=.1)
+    plt.tight_layout()
+    plt.savefig(opt.out_dir + '/dist.png')
     plt.close('all')
 
-def bivariate(opt, X):
-    sns.scatterplot(X[:, 0], X[:, 1])
-    plt.savefig(opt.exp_dir + '/bivariate.png')
+def bivariate(opt, X, n_obs=0):
+    n = X.shape[0]
+    sns.scatterplot(x=X[:n-n_obs, 0], y=X[:n-n_obs, 1])  # interventional part
+    sns.scatterplot(x=X[n-n_obs:, 0], y=X[n-n_obs:, 1])  # observational part
+    plt.xlabel('Cause')
+    plt.ylabel('Effect')
+    plt.savefig(opt.out_dir + '/bivariate.png')
     plt.close('all')
 # -------------------SEQ END------------------------------
 

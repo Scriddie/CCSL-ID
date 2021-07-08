@@ -1,4 +1,6 @@
 # TODO make sure we do useful stuff here?
+import sys
+sys.path.append(sys.path[0]+'/..')
 import pandas as pd
 import numpy as np
 import os
@@ -12,6 +14,7 @@ import shutil
 from argparse import Namespace
 from copy import deepcopy
 import itertools
+import custom_utils.viz as viz
 
 
 OBS_DATASETS = {
@@ -21,13 +24,14 @@ OBS_DATASETS = {
 
 # naming scheme is important
 INT_DATASETS = {
+    'activation-PKA': '9. b2camp.xls',  # TODO they are not using this?
+    # is their reasoning for not using it valid given that we don't fit the interventions anyways?
     'inhibition-AKT': '3. cd3cd28+aktinhib.xls',
-    'inhibition-PKC': '4. cd3cd28+g0076.xls',  # inhibition
-    'inhibition-PIP2': '5. cd3cd28+psitect.xls',
     'inhibition-MEK': '6. cd3cd28+u0126.xls',
-    'inhibition2-AKT': '7. cd3cd28+ly.xls',  # inhibition
-    'activation-PKC': '8. pma.xls',  # activation
-    'activation-PKA': '9. b2camp.xls',
+    'activation-PKC': '8. pma.xls',
+    'inhibition-PKC': '4. cd3cd28+g0076.xls',
+    'inhibition-PIP2': '5. cd3cd28+psitect.xls',
+    'inhibition2-PIP3': '7. cd3cd28+ly.xls',  # looks like this in their chart
 }
 
 def load_dag(opt):
@@ -47,7 +51,7 @@ def align_cols(df):
             'PJNK': 'JNK',
             'PRAF': 'RAF',
             'PMEK': 'MEK',
-            'PLCG': 'PLC'}, axis=1)
+            'PLCG': 'PLCG'}, axis=1)
     return df
 
 
@@ -78,8 +82,8 @@ def show_marginals(obs_data, int_data):
 
 def remove_outliers(opt, df):
     df = deepcopy(df)
-    if opt.std_cutoff:
-        df = df[(np.abs(stats.zscore(df[opt.vars_ord])) < opt.std_cutoff).all(axis=1)]
+    if opt.remove_outliers:
+        df = df[(np.abs(stats.zscore(df[opt.vars_ord])) < opt.remove_outliers).all(axis=1)]
     return df
 
 
@@ -95,7 +99,7 @@ def viz_joint(opt, df, name, hue=None):
         i, j = opt.vars_ord.index(a), opt.vars_ord.index(b)
         sns.jointplot(data=df, x=opt.vars_ord[i], y=opt.vars_ord[j], hue=hue, alpha=.1)
         plt.title(name)
-        plt.savefig(f'{opt.out_path}/distribution_{name}_{a}-{b}.png')
+        plt.savefig(f'{opt.out_dir}/distribution_{name}_{a}-{b}.png')
         plt.close()
 
 
@@ -104,7 +108,7 @@ def viz_lm(opt, df, name, hue=None):
         sns.lmplot(data=df, x=opt.int_vars[0], y=opt.obs_vars[0], hue=hue)
         plt.title(name)
         plt.tight_layout()
-        plt.savefig(f'{opt.out_path}/trends_{name}.png')
+        plt.savefig(f'{opt.out_dir}/trends_{name}.png')
         plt.close()
     else:
         print('No int vars')
@@ -125,21 +129,32 @@ if __name__ == '__main__':
 
     opt = Namespace()
     opt.base_path = './data/sachs/Data Files/'
-    opt.out_path = 'src/seq/data/sachs'
-    opt.int_vars = ['MEK']  # MEK
-    opt.obs_vars = ['ERK']  # ERK
-    opt.obs_files = ['general2']
-    opt.int_files = ['activation-PKA']
+    # activation PKA led to good results so far, think about it!
+    opt.int_files = [
+        # TODO they only use inhibitions! Is this the way to go?
+        # 'activation-PKA',
+        'inhibition-AKT',
+        'inhibition-MEK',
+        # 'activation-PKC',
+        'inhibition-PKC',
+        'inhibition-PIP2',
+        'inhibition2-PIP3',  # TODO are we sure about this target?
+    ]
+    opt.int_vars = list(set([i.split('-')[-1] for i in opt.int_files]))
+    opt.obs_files = ['general1', 'general2']
+    opt.obs_vars = ['RAF', 'ERK', 'JNK', 'P38', 'PLCG', 'PKA']
+    # TODO rename PLCG to PLC?
+    opt.out_dir = 'src/seq/data/sachs'
     opt.vars_ord = opt.int_vars + opt.obs_vars
     opt.standardize = True
-    opt.standardize_globally = False
+    opt.standardize_globally = True
     opt.log_transform = False
-    opt.std_cutoff = 10
+    opt.remove_outliers=False
 
     # # create folder
-    # if os.path.exists(opt.out_path):
-    #     shutil.rmtree(opt.out_path)
-    # os.mkdir(opt.out_path)
+    # if os.path.exists(opt.out_dir):
+    #     shutil.rmtree(opt.out_dir)
+    # os.mkdir(opt.out_dir)
 
     # load data
     obs_data = load_data(opt, OBS_DATASETS, opt.obs_files, 'obs')
@@ -191,52 +206,46 @@ if __name__ == '__main__':
 
     # viz joints
     print(df.head(), df.shape)
-    # viz_joint(opt, remove_outliers(opt, df[df['TYPE']=='observation']), 'obs')
-    # viz_joint(opt, remove_outliers(opt, df[df['TYPE']=='intervention']), 'int')
-
-    # # check shape
-    # for v in opt.vars_ord:
-    #     sns.kdeplot(data=df[v], label=v)
-    # plt.legend()
-    # plt.title('shape before outliers and standardization')
-    # plt.show()
-    # plt.close()
 
     # remove outliers globally
-    df = remove_outliers(opt, df)
+    if opt.remove_outliers:
+        df = remove_outliers(opt, df)
+
+    # select variables
+    source = df['SOURCE']
+    df = df.loc[:, opt.vars_ord]
+    df.reset_index(inplace=True, drop=True)
 
     # standardize globally
-    # TODO fix!
+    # TODO doesn't work for multiple interventional datasets yet!!!
     if opt.standardize and opt.standardize_globally:
-        n_int = sum([len(i) for i in int_data])
-        for i in range(df.values.shape[1]):
-            if i in targets:
-                df.values[n_int:, i] = standardize(df.values[n_int:, i])
+        n_int = [len(i) for i in int_data]
+        tmp = df.values
+        for idx, i in enumerate(opt.vars_ord):
+            if i in opt.int_vars:
+                n_before_int = sum(n_int[:idx])
+                n_this_int = n_int[idx]
+                mask = np.ones(df.shape[0])
+                mask[n_before_int:n_before_int+n_this_int] = 0
+                mask = mask.astype(bool)
+                tmp[mask, idx] =  (df.values[mask, idx] - np.mean(df.values[mask, idx])) / np.std(df.values[mask, idx])
             else:
-                df.values[:, i] = standardize(df.values[:, i])
-        # df = standardize(opt, df)
-
-    # TODO clean code below
-
-    # # check shape
-    # for v in opt.vars_ord:
-    #     sns.kdeplot(data=df[v], label=v)
-    # plt.legend()
-    # plt.title('final shape')
-    # plt.show()
-    # plt.close()
+                tmp[:, idx] =  (df.values[:, idx] - np.mean(df.values[:, idx])) / np.std(df.values[:, idx])
+        df = pd.DataFrame(tmp, columns=df.columns)
 
     # show first int and obs variable
-    viz_joint(opt, df, 'final', hue='SOURCE')
-    # viz_lm(opt, df, 'trend', hue='SOURCE')
+    viz_joint(opt, df, 'final', hue=source)
 
     # Save
-    df = df.loc[:, opt.vars_ord]
+    # TODO save graph as heatmap!
     print(df.head(), df.shape)
-    np.save(f'{opt.out_path}/DAG1.npy', W)
-    np.save(f'{opt.out_path}/data_interv1.npy', df.values)
-    df.to_csv(f'{opt.out_path}/data_interv1.csv', index=False)
-    with open(f'{opt.out_path}/intervention1.csv', 'w', newline="") as f:
+    viz.mat(opt, W)
+    np.save(f'{opt.out_dir}/DAG1.npy', W)
+    with open(f'{opt.out_dir}/DAG.txt', 'w+') as f:
+        f.write(str(W))
+    np.save(f'{opt.out_dir}/data_interv1.npy', df.values)
+    df.to_csv(f'{opt.out_dir}/data_interv1.csv', index=False)
+    with open(f'{opt.out_dir}/intervention1.csv', 'w', newline="") as f:
         writer = csv.writer(f)
         writer.writerows(interv)
-    pd.Series(regime).to_csv(f'{opt.out_path}/regime1.csv', index=False, header=False)
+    pd.Series(regime).to_csv(f'{opt.out_dir}/regime1.csv', index=False, header=False)

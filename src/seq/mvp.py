@@ -148,7 +148,7 @@ class GumbelAdjacency(torch.nn.Module):
         return torch.sigmoid(self.log_alpha) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
 
     def reset_parameters(self):
-        torch.nn.init.constant_(self.log_alpha, 1.)
+        torch.nn.init.constant_(self.log_alpha, 5.)
 
 #--------------------------------Gumbel END-------------------------------
 
@@ -230,7 +230,6 @@ def train_nll(opt, model, df, W, mask, loss_fn):
     # marginal.fit(X_marginal)
     # nll_marg = nll(marginal(X_marginal), X_marginal, MX).item()
 
-    # TODO put in augmented lagrangian logic (external function?)
     ###
     best_nll_val = np.inf
     best_lagrangian_val = np.inf
@@ -262,9 +261,13 @@ def train_nll(opt, model, df, W, mask, loss_fn):
 
     optim = torch.optim.Adam(model.parameters(), lr=opt.LR)
     log = {'losses': [], 'iter': [], 'mat': []}
+
+    # TODO add a sparsity penalty
     for i in range(opt.ITER):
-        # acyclicity violation
         w_adj = model.gumbel_adjacency.get_proba()
+        # TODO eliminate zombies using model.adjacency_matrix??
+        # acyclicity violation
+        sparsity_penalty = opt.sparsity * torch.norm(w_adj)
         h = compute_dag_constraint(w_adj) / constraint_normalization
         # compute augmented langrangian
         lagrangian = gamma * h
@@ -274,7 +277,7 @@ def train_nll(opt, model, df, W, mask, loss_fn):
         optim.zero_grad() 
         losses = loss_fn(X, model, mask)
         nll = torch.mean(torch.sum(losses, axis=1))
-        aug_lagrangian = nll + lagrangian + 0.5 * mu * augmentation
+        aug_lagrangian = (nll + lagrangian + 0.5 * mu * augmentation + sparsity_penalty)
         aug_lagrangian.backward()
         optim.step()
 
@@ -313,8 +316,7 @@ def train_nll(opt, model, df, W, mask, loss_fn):
 
         # logging
         aug_lagrangian = aug_lagrangian.item()
-        if (i % opt.REC_FREQ == 0) or (i == (opt.ITER - 1)):
-            # TODO split up into conditional and marginal!!
+        if (i % int(opt.REC_FREQ) == 0) or (i == (opt.ITER - 1)):
             log['losses'].append(np.mean(losses.detach().numpy(), axis=0))
             # log['marginal'].append(nll_marg)
             log['iter'].append(i)
@@ -328,9 +330,11 @@ def train_nll(opt, model, df, W, mask, loss_fn):
 
         # viz progress
         if i % opt.plot_freq == 0:
-            viz.learning(opt, log)
+            viz.learning(opt, log, W)
             viz.conditionals(opt, model, X)
             viz.model_fit(opt, model, X)
+            viz.mat(opt, log['mat'][-1])
+            # TODO save graph as heatmap
 
     print()
     return log
