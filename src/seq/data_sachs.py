@@ -14,6 +14,7 @@ import shutil
 from argparse import Namespace
 from copy import deepcopy
 import itertools
+import custom_utils as utils
 import custom_utils.viz as viz
 
 
@@ -126,6 +127,7 @@ def log_transform(opt, df):
 
 if __name__ == '__main__':
     # TODO test for another variable
+    utils.create_folder('./data')
 
     opt = Namespace()
     opt.base_path = './data/sachs/Data Files/'
