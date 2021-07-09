@@ -7,7 +7,7 @@ scanpy_course/3k_PBMC
 *.zip
 download.txt
 */Benchmark-Models-PEtab
-data/
+data/other
 output_*
 
 # custom folders
@@ -18,11 +18,10 @@ src/genenetweaver/
 src/gnw_official_sandbox/
 src/imputation/
 experiments/
+src/*.csv
+src/seq/data
 
 # Custom formats
-*.csv
-!data/sachs/consensus_adj_mat.csv
-!data/sachs/sachs.csv
 .Rhistory
 *.doc#
 *.xls#
