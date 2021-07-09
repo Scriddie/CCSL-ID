@@ -16,10 +16,11 @@ def get_opt():
     # plotting
     opt.plot_freq = 1000
     # dirs
-    opt.data_dir = os.path.join('src', 'seq', 'data', 'sachs')
+    opt.data_dir = os.path.join('src', 'seq', 'data', 'intervA')
     opt.out_dir = os.path.join(opt.data_dir, 'exp')
     # network
-    opt.n_in = 11
+    opt.n_in = 2
+    opt.n_layers = 3
     opt.n_hidden = 16
     # training
     opt.ITER = 30000
@@ -40,6 +41,8 @@ def get_opt():
     return opt
 
 if __name__ == '__main__':
+    print('GETTING STARTED')
+
     # options
     opt = get_opt()
 
@@ -52,7 +55,7 @@ if __name__ == '__main__':
     # train
     model = BaseMLP.BaseMLP(
         d=opt.n_in,
-        num_layers=2, 
+        num_layers=opt.n_layers, 
         hid_dim=opt.n_hidden, 
         num_params=1,
         zombie_threshold=opt.zombie_threshold,

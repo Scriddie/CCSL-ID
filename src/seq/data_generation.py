@@ -42,7 +42,7 @@ def generate_nonlinear(opt, t=lambda x: x**2):
 
 def create_dataset(opt, obs=True, targets=[], nonlinear=False):
     gen = lambda opt: generate_nonlinear(opt, nonlinear) if nonlinear else generate
-    utils.overwrite_folder(opt.exp_dir)
+    utils.overwrite_folder(opt.out_dir)
 
     # int data
     # TODO int data is hack for now, only works for bivariate!
@@ -89,7 +89,7 @@ def create_dataset(opt, obs=True, targets=[], nonlinear=False):
                 df.values[:, i] = standardize(df.values[:, i])
 
     # DAG1.npy
-    np.save(os.path.join(opt.exp_dir, f'DAG1.npy'), opt.W_true)
+    np.save(os.path.join(opt.out_dir, f'DAG1.npy'), opt.W_true)
 
     # TODO not 100% sure about regimes but doesn't matter for now
     # intervention1.csv & regime1.csv
@@ -100,15 +100,15 @@ def create_dataset(opt, obs=True, targets=[], nonlinear=False):
         regime.extend([idx+1 for _ in range(len(int_data[idx]))])
     interv.extend([[] for _ in range(sum([len(i) for i in obs_data]))])
     regime.extend([0 for _ in range(sum([len(i) for i in obs_data]))])
-    df.to_csv(f'{opt.exp_dir}/data_interv1.csv', index=False)
-    with open(f'{opt.exp_dir}/intervention1.csv', 'w', newline="") as f:
+    df.to_csv(f'{opt.out_dir}/data_interv1.csv', index=False)
+    with open(f'{opt.out_dir}/intervention1.csv', 'w', newline="") as f:
         writer = csv.writer(f)
         writer.writerows(interv)
-    pd.Series(regime).to_csv(f'{opt.exp_dir}/regime1.csv', index=False, header=False)
+    pd.Series(regime).to_csv(f'{opt.out_dir}/regime1.csv', index=False, header=False)
 
     # # TODO data_interv1.csv
     # fname = utils.dataset_description(dataset)
-    # with open(os.path.join(opt.exp_dir, f"{fname}.pk"), "wb") as f:
+    # with open(os.path.join(opt.out_dir, f"{fname}.pk"), "wb") as f:
     #     pk.dump(dataset, f)
 
     # snap options

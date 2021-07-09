@@ -8,7 +8,7 @@ if __name__ == "__main__":
     opt = Namespace()
     # files
     opt.exp_name = "intervA"
-    opt.exp_dir = "src/seq/data/" + opt.exp_name
+    opt.out_dir = "src/seq/data/" + opt.exp_name
     # data
     opt.noise = 'gauss'
     opt.noise_means = (0., 0.)
@@ -19,12 +19,13 @@ if __name__ == "__main__":
     opt.n_nodes = len(opt.W_true)
     opt.n_obs = 10000
     opt.random_seed = 0
+    opt.standardize_individually=False
 
     # create dataset
     create_dataset(opt, obs=False, targets=[0], nonlinear=lambda x: x**2)
 
     # make sure everything went right
-    inspect(opt.exp_dir)
+    inspect(opt.out_dir)
 
 
 # TODO generate some interventional data on A!

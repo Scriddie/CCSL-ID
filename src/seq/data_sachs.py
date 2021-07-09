@@ -100,7 +100,7 @@ def viz_joint(opt, df, name, hue=None):
         i, j = opt.vars_ord.index(a), opt.vars_ord.index(b)
         sns.jointplot(data=df, x=opt.vars_ord[i], y=opt.vars_ord[j], hue=hue, alpha=.1)
         plt.title(name)
-        plt.savefig(f'{opt.out_dir}/distribution_{name}_{a}-{b}.png')
+        plt.savefig(f'{opt.out_dir}/figures/distribution_{name}_{a}-{b}.png')
         plt.close()
 
 
@@ -126,8 +126,9 @@ def log_transform(opt, df):
 
 
 if __name__ == '__main__':
-    # TODO test for another variable
-    utils.create_folder('./data')
+    utils.create_folder('src/seq/data')
+    utils.overwrite_folder('src/seq/data/sachs')
+    utils.overwrite_folder('src/seq/data/sachs/figures')
 
     opt = Namespace()
     opt.base_path = './data/sachs/Data Files/'
