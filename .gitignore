@@ -18,10 +18,11 @@ src/genenetweaver/
 src/gnw_official_sandbox/
 src/imputation/
 experiments/
-!/data/sachs
 
 # Custom formats
 *.csv
+!data/sachs/consensus_adj_mat.csv
+!data/sachs/sachs.csv
 .Rhistory
 *.doc#
 *.xls#
