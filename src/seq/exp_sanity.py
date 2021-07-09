@@ -16,10 +16,10 @@ def get_opt():
     # plotting
     opt.plot_freq = 1000
     # dirs
-    opt.data_dir = os.path.join('src', 'seq', 'data', 'intervA')
+    opt.data_dir = os.path.join('src', 'seq', 'data', 'sachs')
     opt.out_dir = os.path.join(opt.data_dir, 'exp')
     # network
-    opt.n_in = 2
+    opt.n_in = 11
     opt.n_layers = 3
     opt.n_hidden = 16
     # training
