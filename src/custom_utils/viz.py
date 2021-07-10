@@ -184,7 +184,7 @@ def learning(opt, log, W_true):
 
 def mat(opt, mat):
     """ adjacency matrix as heatmap """
-    sns.heatmap(mat)
+    sns.heatmap(mat, vmin=0, vmax=1)
     plt.savefig(opt.out_dir+'/mat.png')
     plt.close('all')
 
@@ -193,7 +193,7 @@ def model_fit(opt, model, X):
     d = X.shape[1]
     # some uniform
     input = torch.tensor(np.concatenate(
-        tuple([np.linspace(-3., 3., 10000).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
+        tuple([np.linspace(-10., 10., 30000).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
     # forward through model
     with torch.no_grad():
         output = model.forward(input, nomask=True)

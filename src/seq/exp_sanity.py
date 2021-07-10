@@ -16,10 +16,10 @@ def get_opt():
     # plotting
     opt.plot_freq = 1000
     # dirs
-    opt.data_dir = os.path.join('src', 'seq', 'data', 'sachs')
+    opt.data_dir = os.path.join('src', 'seq', 'data', '3chain')
     opt.out_dir = os.path.join(opt.data_dir, 'exp')
     # network
-    opt.n_in = 11
+    opt.n_in = 3
     opt.n_layers = 3
     opt.n_hidden = 16
     # training
@@ -32,10 +32,10 @@ def get_opt():
     opt.omega_gamma = 1e-3  # Precision to declare convergence of subproblems
     opt.omega_mu = 0.8  # Desired reduction in constraint violation
     opt.mu_mult_factor = 2
-    opt.stop_crit_win = 30
+    opt.stop_crit_win = 100
     # sparsity
     opt.sparsity = 0.  # see if zombie edges provide better regularization
-    opt.zombie_threshold = 0.2
+    opt.zombie_threshold = 0.0
     # save opt
     utils.snap(opt, fname='exp_options.txt')
     return opt
@@ -83,3 +83,7 @@ if __name__ == '__main__':
 # are we still increasing the penalties too fast?
 
 # TODO put on the cluster, compare our results to theirs, separate scaling from zombie threshold
+
+# TODO prepare a 3 chain exp with sinus curves, check if zombie reg works
+
+# TODO could part of the problem be that we are taking away too many inputs from the network simultaneously?

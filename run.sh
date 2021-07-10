@@ -4,8 +4,11 @@
 #SBATCH --output=output_%j.txt
 #SBATCH --time=10:00
 #SBATCH --nodes=1
-#SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=8
+#SBATCH --tasks-per-node=8
+
+# TODO
+# SBATCH --cpus-per-task=8
+
 #SBATCH --mem-per-cpu=4G
 
 # TODO do more cpus make it slower or do they just take longer to set up?

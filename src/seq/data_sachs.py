@@ -219,8 +219,8 @@ if __name__ == '__main__':
     df = df.loc[:, opt.vars_ord]
     df.reset_index(inplace=True, drop=True)
 
+    # TODO check again
     # standardize globally
-    # TODO doesn't work for multiple interventional datasets yet!!!
     if opt.standardize and opt.standardize_globally:
         n_int = [len(i) for i in int_data]
         tmp = df.values
@@ -231,7 +231,11 @@ if __name__ == '__main__':
                 mask = np.ones(df.shape[0])
                 mask[n_before_int:n_before_int+n_this_int] = 0
                 mask = mask.astype(bool)
-                tmp[mask, idx] =  (df.values[mask, idx] - np.mean(df.values[mask, idx])) / np.std(df.values[mask, idx])
+                non_int_mean = np.mean(df.values[mask, idx])
+                non_int_std = np.std(df.values[mask, idx])
+                # standardize all with non_int values
+                tmp[:, idx] =  (df.values[:, idx] - non_int_mean) / non_int_std
+                # tmp[mask, idx] =  (df.values[mask, idx] - np.mean(df.values[mask, idx])) / np.std(df.values[mask, idx])
             else:
                 tmp[:, idx] =  (df.values[:, idx] - np.mean(df.values[:, idx])) / np.std(df.values[:, idx])
         df = pd.DataFrame(tmp, columns=df.columns)
@@ -247,7 +251,7 @@ if __name__ == '__main__':
     with open(f'{opt.out_dir}/DAG.txt', 'w+') as f:
         f.write(str(W))
     np.save(f'{opt.out_dir}/data_interv1.npy', df.values)
-    df.to_csv(f'{opt.out_dir}/data_interv1.csv', index=False)
+    df.to_csv(f'{opt.out_dir}/data_interv1.csv', index=False, header=False)
     with open(f'{opt.out_dir}/intervention1.csv', 'w', newline="") as f:
         writer = csv.writer(f)
         writer.writerows(interv)

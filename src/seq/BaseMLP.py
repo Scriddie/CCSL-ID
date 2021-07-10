@@ -49,7 +49,6 @@ class BaseMLP(nn.Module):
         self.zero_weights_ratio = 0.
         self.numel_weights = 0
 
-        # Instantiate the parameters of each layer in the model of each variable
         for i in range(self.num_layers + 1):
             in_dim = self.hid_dim
             out_dim = self.hid_dim
@@ -90,6 +89,7 @@ class BaseMLP(nn.Module):
         # TODO eliminate dead edges in acyclicity constraint as well!?
         self.adjacency = torch.where(self.gumbel_adjacency.get_proba() < self.zombie_threshold, torch.zeros_like(self.adjacency), self.adjacency)
 
+        # TODO walk through computation once more to make sure it's all right
         for layer in range(self.num_layers + 1):
             # First layer, apply the mask
             if layer == 0:

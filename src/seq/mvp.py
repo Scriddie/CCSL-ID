@@ -148,7 +148,7 @@ class GumbelAdjacency(torch.nn.Module):
         return torch.sigmoid(self.log_alpha) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
 
     def reset_parameters(self):
-        torch.nn.init.constant_(self.log_alpha, 5.)
+        torch.nn.init.constant_(self.log_alpha, -5.)
 
 #--------------------------------Gumbel END-------------------------------
 
@@ -338,3 +338,5 @@ def train_nll(opt, model, df, W, mask, loss_fn):
 
     print()
     return log
+
+# TODO I need to use a different set of weights and biases for each conditional!!!
