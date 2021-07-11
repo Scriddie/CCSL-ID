@@ -109,7 +109,22 @@ Observations
     \item They assume homoscedasticity
     \item The adversarial sachs et al example should also be bad news for sparsity constraints, no?
     \item Under model misspecification I have no score equivalence either way. Why no take score equivalence to make sure I specified my model correcty?
+    \item The gumbel initialization makes a massive difference! With low starting values, even good fits achieve next to nothing
+    \item change greater to greater equal in "delta\_gamma >= 0" to prevent getting stuck on plateaus
+    \item Learning rate is quite important, decides whether we race edges against each other or just send certain ones to zero almost instantly
+    \item Remove zombie edges from acyclicity violation, too. They can just drag down good edges when penalty goes high very quickly
+    \item The fact that the net is trying to fit the zeros induced by the gumbel adjacency looks to be a real problem, especially in an edge race. Maybe we should just predict zero in these cases without using the network? For multiple inputs, if some were masked out, we should indicate somehow that we didn't have this value (not the same as zero)?
 \end{enumerate}
+
+\subsection{Which interventions to choose from}
+in \cite{} and \cite{} they don't use the activation interventions because they argue they would affect receptor enzymes instead of measured signaling proteins. These interventions don't (de-)phosporylate anything and therefore don't change the abundance of the protein. Yet they do change the activity.
+
+In fact, in \url{https://en.wikipedia.org/wiki/Protein_kinase_A#:~:text=In%20direct%20protein%20phosphorylation%2C%20PKA,the%20synthesis%20of%20the%20protein} (section Activation, bottom) it looks to me like cAMP would indeed result in an abundance increase that can be measured by the PKA antibody used in the Sachs et al. data set. This would mean we can use the PKA intervention (after all this part works best of all!).
+
+Question: Does the PKA antibody actually measure PKA, or does it measure it's effects???
+
+How should we best make use of these interventions? Investigate if there is a change in abundancy. If there is absolutely none, does our scaling help at all?
+Using a different network for each interventional distribution could help us cope with that. A separate network for each range would make it harder to argue for an invariant causal effect, but it will allow for a type of activation that does not consist in the change of abundance.
 
 \subsection{Score}
 

@@ -23,19 +23,21 @@ def get_opt():
     opt.n_layers = 3
     opt.n_hidden = 16
     # training
+    opt.foreplay_iter= 0  # only fit, no acyclicity penalty
     opt.ITER = 30000
     opt.REC_FREQ = opt.ITER/30
     opt.LR = 1e-3
-    opt.mu_init = 1e-4
-    opt.gamma_init = 1e-4
+    opt.mu_init = 1e-5
+    opt.gamma_init = 1e-5
     opt.h_threshold = 1e-2
     opt.omega_gamma = 1e-3  # Precision to declare convergence of subproblems
     opt.omega_mu = 0.8  # Desired reduction in constraint violation
     opt.mu_mult_factor = 2
-    opt.stop_crit_win = 100
+    opt.stop_crit_win = 50
     # sparsity
     opt.sparsity = 0.  # see if zombie edges provide better regularization
-    opt.zombie_threshold = 0.0
+    opt.zombie_threshold = 0.05
+    opt.max_adj_entry = 5.
     # save opt
     utils.snap(opt, fname='exp_options.txt')
     return opt
@@ -49,8 +51,8 @@ if __name__ == '__main__':
     # data and model
     dag, data, mask, regimes = mvp.read(opt)
 
-    # plot data
-    viz.bivariate(opt, data.values)
+    # # plot data
+    # viz.bivariate(opt, data.values)
 
     # train
     model = BaseMLP.BaseMLP(
@@ -59,7 +61,10 @@ if __name__ == '__main__':
         hid_dim=opt.n_hidden, 
         num_params=1,
         zombie_threshold=opt.zombie_threshold,
-        intervention=True
+        intervention=True,
+        intervention_tpye='perfect',
+        intervention_knowledge='known'
+        max_adj_entry=opt.max_adj_entry,
     )
     log = mvp.train_nll(opt, model, data, dag, mask, loss_fn=mvp.gauss_nll)
     
@@ -87,3 +92,7 @@ if __name__ == '__main__':
 # TODO prepare a 3 chain exp with sinus curves, check if zombie reg works
 
 # TODO could part of the problem be that we are taking away too many inputs from the network simultaneously?
+
+# TODO is there some connection to spectral biases?
+
+# TODO fix bivariate plot

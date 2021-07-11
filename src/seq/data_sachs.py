@@ -1,4 +1,3 @@
-# TODO make sure we do useful stuff here?
 import sys
 sys.path.append(sys.path[0]+'/..')
 import pandas as pd
@@ -135,17 +134,17 @@ if __name__ == '__main__':
     # activation PKA led to good results so far, think about it!
     opt.int_files = [
         # TODO they only use inhibitions! Is this the way to go?
-        # 'activation-PKA',
+        'activation-PKA', ##
         'inhibition-AKT',
         'inhibition-MEK',
-        # 'activation-PKC',
+        'activation-PKC', ##
         'inhibition-PKC',
         'inhibition-PIP2',
         'inhibition2-PIP3',  # TODO are we sure about this target?
     ]
     opt.int_vars = list(set([i.split('-')[-1] for i in opt.int_files]))
     opt.obs_files = ['general1', 'general2']
-    opt.obs_vars = ['RAF', 'ERK', 'JNK', 'P38', 'PLCG', 'PKA']
+    opt.obs_vars = ['RAF', 'ERK', 'JNK', 'P38', 'PLCG']
     # TODO rename PLCG to PLC?
     opt.out_dir = 'src/seq/data/sachs'
     opt.vars_ord = opt.int_vars + opt.obs_vars
@@ -188,8 +187,8 @@ if __name__ == '__main__':
             interv.extend([[target_idx] for _ in range(len(d))])
             regime.extend([idx+1 for _ in range(len(d))])
         else:
-            interv.extend([[] for _ in range(len(d))])
-            regime.extend([0 for _ in range(len(d))])
+            print('Warning, target not in columns!')
+            sys.exit(1)
     # obs data
     interv.extend([[] for _ in range(sum([len(i) for i in obs_data]))])
     regime.extend([0 for _ in range(sum([len(i) for i in obs_data]))])
@@ -219,7 +218,6 @@ if __name__ == '__main__':
     df = df.loc[:, opt.vars_ord]
     df.reset_index(inplace=True, drop=True)
 
-    # TODO check again
     # standardize globally
     if opt.standardize and opt.standardize_globally:
         n_int = [len(i) for i in int_data]
@@ -229,10 +227,16 @@ if __name__ == '__main__':
                 n_before_int = sum(n_int[:idx])
                 n_this_int = n_int[idx]
                 mask = np.ones(df.shape[0])
-                mask[n_before_int:n_before_int+n_this_int] = 0
+                mask[n_before_int : n_before_int + n_this_int] = 0
                 mask = mask.astype(bool)
-                non_int_mean = np.mean(df.values[mask, idx])
-                non_int_std = np.std(df.values[mask, idx])
+                if mask.sum() == 0:
+                    # we have no observational data
+                    non_int_mean = 0
+                    non_int_std = 1
+                else:
+                    # we have obs data
+                    non_int_mean = np.mean(df.values[mask, idx])
+                    non_int_std = np.std(df.values[mask, idx])
                 # standardize all with non_int values
                 tmp[:, idx] =  (df.values[:, idx] - non_int_mean) / non_int_std
                 # tmp[mask, idx] =  (df.values[mask, idx] - np.mean(df.values[mask, idx])) / np.std(df.values[mask, idx])
@@ -244,7 +248,6 @@ if __name__ == '__main__':
     viz_joint(opt, df, 'final', hue=source)
 
     # Save
-    # TODO save graph as heatmap!
     print(df.head(), df.shape)
     viz.mat(opt, W)
     np.save(f'{opt.out_dir}/DAG1.npy', W)

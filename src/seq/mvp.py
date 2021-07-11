@@ -148,7 +148,9 @@ class GumbelAdjacency(torch.nn.Module):
         return torch.sigmoid(self.log_alpha) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
 
     def reset_parameters(self):
-        torch.nn.init.constant_(self.log_alpha, -5.)
+        torch.nn.init.constant_(self.log_alpha, 5.)
+        # TODO just a test hack rn
+        # self.log_alpha.
 
 #--------------------------------Gumbel END-------------------------------
 
@@ -156,7 +158,7 @@ class GumbelAdjacency(torch.nn.Module):
 def read(opt):
     """ read in data """
     dag = np.load(os.path.join(opt.data_dir, 'DAG1.npy'))
-    data = pd.read_csv(os.path.join(opt.data_dir, 'data_interv1.csv'))
+    data = pd.read_csv(os.path.join(opt.data_dir, 'data_interv1.csv'), header=None)
     mask = np.ones(data.shape)
     # TODO check this is right!
     try:  # works if there were any interventions
@@ -264,7 +266,9 @@ def train_nll(opt, model, df, W, mask, loss_fn):
 
     # TODO add a sparsity penalty
     for i in range(opt.ITER):
+        # adjacency matrix filtered for zombie edges
         w_adj = model.gumbel_adjacency.get_proba()
+        w_adj *= model.adjacency
         # TODO eliminate zombies using model.adjacency_matrix??
         # acyclicity violation
         sparsity_penalty = opt.sparsity * torch.norm(w_adj)
@@ -277,9 +281,13 @@ def train_nll(opt, model, df, W, mask, loss_fn):
         optim.zero_grad() 
         losses = loss_fn(X, model, mask)
         nll = torch.mean(torch.sum(losses, axis=1))
-        aug_lagrangian = (nll + lagrangian + 0.5 * mu * augmentation + sparsity_penalty)
+        if i < opt.foreplay_iter:
+            aug_lagrangian = nll
+        else:
+            aug_lagrangian = (nll + lagrangian + 0.5 * mu * augmentation + sparsity_penalty)
         aug_lagrangian.backward()
         optim.step()
+        model.adjust_params()
 
         # determine delta_gamma
         if i % opt.stop_crit_win == 0:
@@ -303,7 +311,7 @@ def train_nll(opt, model, df, W, mask, loss_fn):
         if constraint_violation > opt.h_threshold:
 
             # we have either solved the problem or gone backwards -> penalty up
-            if abs(delta_gamma) < opt.omega_gamma or delta_gamma > 0:
+            if abs(delta_gamma) < opt.omega_gamma or delta_gamma >= 0:
                 gamma += mu * constraint_violation
                 print("Updated gamma to {}".format(gamma))
 
@@ -339,4 +347,12 @@ def train_nll(opt, model, df, W, mask, loss_fn):
     print()
     return log
 
-# TODO I need to use a different set of weights and biases for each conditional!!!
+# TODO gamma and mu stop increasing from pretty early on!
+# TODO the sigmoids saturate too much, even in the very end we have 2-cycles???
+# TODO just set a max for any sigmoid entry?
+# TODO log the different loss components
+# TODO show the different distributions in dist.png
+
+# TODO in this last one, why is the last edge still falling? doesn't make any sense!
+# TODO there is something wrong with the gradients in the last stage!
+# TODO log edge grad norms same way as edges themselves!

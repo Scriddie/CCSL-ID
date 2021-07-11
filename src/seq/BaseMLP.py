@@ -4,10 +4,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from seq.mvp import GumbelAdjacency
+import numpy as np
 
 
 class BaseMLP(nn.Module):
-    def __init__(self, d, num_layers, hid_dim, num_params, zombie_threshold,    nonlin="leaky-relu", intervention=False, intervention_type="perfect",intervention_knowledge="known", num_regimes=1):
+    def __init__(self, d, num_layers, hid_dim, num_params, zombie_threshold,    nonlin="leaky-relu", intervention=False, intervention_type="perfect",intervention_knowledge="known", num_regimes=1, max_adj_entry=np.inf):
         """
         :param int d: number of variables in the system
         :param int num_layers: number of hidden layers
@@ -31,6 +32,7 @@ class BaseMLP(nn.Module):
         self.intervention_knowledge = intervention_knowledge
         self.num_regimes = num_regimes
         self.zombie_threshold = zombie_threshold
+        self.max_adj_entry = torch.tensor(max_adj_entry)
 
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
@@ -70,6 +72,18 @@ class BaseMLP(nn.Module):
     def get_interv_w(self, bs, regime):
         return self.gumbel_interv_w(bs, regime)
 
+    def adjust_params(self):
+        """ make sure parameters maintain all specified conditions """
+        with torch.no_grad():
+            probas = self.gumbel_adjacency.get_proba()
+            # prevent zombie edges using adj
+            # TODO eliminate dead edges in acyclicity constraint as well!?
+            self.adjacency = torch.where(probas < self.zombie_threshold, torch. zeros_like(self.adjacency), self.adjacency)
+            # limit maximum entry values
+            vals = self.gumbel_adjacency.log_alpha.data
+            self.gumbel_adjacency.log_alpha.data = torch.where(vals>self.   max_adj_entry, self.max_adj_entry, vals)
+
+
     def forward(self, x, mask=None, nomask=False):
         # TODO we are not using get_weights for now
         weights = self.weights
@@ -85,10 +99,6 @@ class BaseMLP(nn.Module):
         bs = x.size(0)
         num_zero_weights = 0
 
-        # prevent zombie edges using adj
-        # TODO eliminate dead edges in acyclicity constraint as well!?
-        self.adjacency = torch.where(self.gumbel_adjacency.get_proba() < self.zombie_threshold, torch.zeros_like(self.adjacency), self.adjacency)
-
         # TODO walk through computation once more to make sure it's all right
         for layer in range(self.num_layers + 1):
             # First layer, apply the mask
@@ -99,6 +109,11 @@ class BaseMLP(nn.Module):
                 if nomask:  # get unmasked predictions
                     M = torch.ones_like(M)
 
+                # TODO I can't help but think we might have the matrix orientations wrong???
+                # TODO check the weight orientations, too
+                # TODO check all the other einsums as well!
+                # bjt should be btj ???
+                # ljt should be ltj ???
                 if not self.intervention:
                     x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], M, adj, x) + biases[layer]
                 elif self.intervention_type == "perfect" and self.intervention_knowledge == "known":

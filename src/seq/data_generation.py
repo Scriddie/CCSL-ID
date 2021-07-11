@@ -61,7 +61,8 @@ def generate_nonlinear(opt, target, transformation):
                         X[:, i] = np.random.normal(np.random.uniform(*opt.noise_means), np.random.uniform(*opt.noise_variance), opt.n_obs)
                     else:
                         for parent in parent_indices:
-                            X[:, i] += transformation(X[:, parent])
+                            tf = transformation[i]
+                            X[:, i] += tf(X[:, parent])
                             X[:, i] += np.random.normal(np.random.uniform(*opt.noise_means), np.random.uniform(*opt.noise_variance), opt.n_obs)
 
             # advance break condition
@@ -126,8 +127,14 @@ def create_dataset(opt, obs, targets, transformation):
                 mask = np.ones(df.shape[0])
                 mask[n_before_int:n_before_int+n_this_int] = 0
                 mask = mask.astype(bool)
-                non_int_mean = np.mean(df.values[mask, idx])
-                non_int_std = np.std(df.values[mask, idx])
+                if mask.sum() == 0:
+                    # we have no observational data
+                    non_int_mean = 0
+                    non_int_std = 1
+                else:
+                    # we have obs data
+                    non_int_mean = np.mean(df.values[mask, idx])
+                    non_int_std = np.std(df.values[mask, idx])
                 # standardize all with non_int values
                 tmp[:, idx] =  (df.values[:, idx] - non_int_mean) / non_int_std
             else:
@@ -163,7 +170,7 @@ def create_dataset(opt, obs, targets, transformation):
     utils.snap(opt, fname='options')
 
     # visualize all the data (with appropriate colors)?)
-    viz.bivariate(opt, df.values)
+    viz.bivariate(opt, df.values, targets, [len(i) for i in int_data])
 
 
 def inspect_pk(base_dir):

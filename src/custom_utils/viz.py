@@ -9,6 +9,7 @@ from pathlib import Path
 from networkx.drawing.nx_agraph import graphviz_layout
 from argparse import Namespace
 
+
 # -------------------MDN START------------------------------
 
 def viz_marginal(opt, model, dgp, polarity=''):
@@ -177,7 +178,7 @@ def learning(opt, log, W_true):
     color_dict = {str(idx): 'green' if i!=0 else 'red' for idx, i in enumerate(W_true.flatten())}
     # melted['edges'] = melted['variable'].replace(color_dict)
     sns.lineplot(data=melted, x='Iteration', y='Edge', hue='variable', palette=color_dict)
-    plt.axhline(y=opt.zombie_threshold)
+    plt.axhline(y=opt.zombie_threshold, color='k', linestyle='--')
     plt.legend('', frameon=False)
     plt.savefig(opt.out_dir + '/edges.png')
     plt.close('all')
@@ -193,7 +194,7 @@ def model_fit(opt, model, X):
     d = X.shape[1]
     # some uniform
     input = torch.tensor(np.concatenate(
-        tuple([np.linspace(-10., 10., 30000).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
+        tuple([np.linspace(-5., 5., 30000).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
     # forward through model
     with torch.no_grad():
         output = model.forward(input, nomask=True)
@@ -226,10 +227,21 @@ def conditionals(opt, model, X):
     plt.savefig(opt.out_dir + '/dist.png')
     plt.close('all')
 
-def bivariate(opt, X, n_obs=0):
+# TODO this is crappy af
+# TODO ideally, show any cause-effect link...
+def bivariate(opt, X, targets, int_lens):
     n = X.shape[0]
-    sns.scatterplot(x=X[:n-n_obs, 0], y=X[:n-n_obs, 1])  # interventional part
-    sns.scatterplot(x=X[n-n_obs:, 0], y=X[n-n_obs:, 1])  # observational part
+    for idx, i in enumerate(targets):
+        n_before = max(0, sum(int_lens[:i]))
+        # interventional part
+        sns.scatterplot(x=X[n_before:n_before+int_lens[idx], i], 
+                        y=X[n_before:n_before+int_lens[idx], i-1])
+        # observational part
+        mask = np.ones(n)
+        mask[n_before:n_before+int_lens[idx]] = 0.
+        mask = mask.astype(bool)
+        sns.scatterplot(x=X[mask, i], 
+                        y=X[mask, i-1])
     plt.xlabel('Cause')
     plt.ylabel('Effect')
     plt.savefig(opt.out_dir + '/bivariate.png')

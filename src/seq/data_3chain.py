@@ -29,9 +29,13 @@ if __name__ == "__main__":
     opt.standardize_individually = False
 
     # create dataset
-    create_dataset(opt, obs=True, targets=[0], 
+    create_dataset(opt, obs=True, targets=[1], 
         # nonlinear=lambda x: -0.05*x**4 + x**2
-        transformation=lambda x: 3*np.sin(x-3)
+        transformation=[
+            lambda x: x,
+            lambda x: 3*np.sin(x-3),
+            lambda x: x**2
+        ]
     )
 
     # make sure everything went right
