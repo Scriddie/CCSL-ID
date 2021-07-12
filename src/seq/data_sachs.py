@@ -10,7 +10,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy import stats
 import shutil
-from argparse import Namespace
+from argparse import Namespace, ONE_OR_MORE
 from copy import deepcopy
 import itertools
 import custom_utils as utils
@@ -115,7 +115,10 @@ def viz_lm(opt, df, name, hue=None):
 
 
 def standardize(opt, df):
-    df[opt.vars_ord] = (df[opt.vars_ord]-df[opt.vars_ord].mean())/df[opt.vars_ord].std()
+    if opt.demean:
+        df[opt.vars_ord] = (df[opt.vars_ord]-df[opt.vars_ord].mean())/df[opt.vars_ord].std()
+    else:
+        df[opt.vars_ord] = (df[opt.vars_ord])/df[opt.vars_ord].std()
     return df
 
 
@@ -134,24 +137,25 @@ if __name__ == '__main__':
     # activation PKA led to good results so far, think about it!
     opt.int_files = [
         # TODO they only use inhibitions! Is this the way to go?
-        'activation-PKA', ##
-        'inhibition-AKT',
+        # 'activation-PKA', ##
+        # 'inhibition-AKT',
         'inhibition-MEK',
-        'activation-PKC', ##
-        'inhibition-PKC',
-        'inhibition-PIP2',
-        'inhibition2-PIP3',  # TODO are we sure about this target?
+        # 'activation-PKC', ##
+        # 'inhibition-PKC',
+        # 'inhibition-PIP2',
+        # 'inhibition2-PIP3',  # TODO are we sure about this target?
     ]
     opt.int_vars = list(set([i.split('-')[-1] for i in opt.int_files]))
-    opt.obs_files = ['general1', 'general2']
-    opt.obs_vars = ['RAF', 'ERK', 'JNK', 'P38', 'PLCG']
+    opt.obs_files = ['general1']  # + ['general2']
+    opt.obs_vars = ['ERK']  # ['RAF', 'ERK', 'JNK', 'P38']  # + ['PLCG']
     # TODO rename PLCG to PLC?
     opt.out_dir = 'src/seq/data/sachs'
     opt.vars_ord = opt.int_vars + opt.obs_vars
     opt.standardize = True
     opt.standardize_globally = True
+    opt.demean = True
     opt.log_transform = False
-    opt.remove_outliers=False
+    opt.remove_outliers = False
 
     # # create folder
     # if os.path.exists(opt.out_dir):
@@ -173,6 +177,7 @@ if __name__ == '__main__':
 
     # DAG
     W = load_dag(opt)
+    opt.W_true = W.values
 
     # intervention masks & regimes
     interv = []
@@ -218,7 +223,7 @@ if __name__ == '__main__':
     df = df.loc[:, opt.vars_ord]
     df.reset_index(inplace=True, drop=True)
 
-    # standardize globally
+    # standardize globally BUT keep mean!
     if opt.standardize and opt.standardize_globally:
         n_int = [len(i) for i in int_data]
         tmp = df.values
@@ -238,10 +243,15 @@ if __name__ == '__main__':
                     non_int_mean = np.mean(df.values[mask, idx])
                     non_int_std = np.std(df.values[mask, idx])
                 # standardize all with non_int values
-                tmp[:, idx] =  (df.values[:, idx] - non_int_mean) / non_int_std
-                # tmp[mask, idx] =  (df.values[mask, idx] - np.mean(df.values[mask, idx])) / np.std(df.values[mask, idx])
+                if opt.demean:
+                    tmp[:, idx] =  (df.values[:, idx] - non_int_mean) / non_int_std
+                else:
+                    tmp[:, idx] =  (df.values[:, idx]) / non_int_std
             else:
-                tmp[:, idx] =  (df.values[:, idx] - np.mean(df.values[:, idx])) / np.std(df.values[:, idx])
+                if opt.demean:
+                    tmp[:, idx] =  (df.values[:, idx] - np.mean(df.values[:, idx])) / np.std(df.values[:, idx])
+                else:
+                    tmp[:, idx] =  (df.values[:, idx]) / np.std(df.values[:, idx])
         df = pd.DataFrame(tmp, columns=df.columns)
 
     # show first int and obs variable
@@ -250,6 +260,8 @@ if __name__ == '__main__':
     # Save
     print(df.head(), df.shape)
     viz.mat(opt, W)
+    viz.bivariate(opt, df.values, 
+                  targets=[list(df.columns).index(i) for i in opt.int_vars], int_lens=[len(i) for i in int_data])
     np.save(f'{opt.out_dir}/DAG1.npy', W)
     with open(f'{opt.out_dir}/DAG.txt', 'w+') as f:
         f.write(str(W))
@@ -259,3 +271,5 @@ if __name__ == '__main__':
         writer = csv.writer(f)
         writer.writerows(interv)
     pd.Series(regime).to_csv(f'{opt.out_dir}/regime1.csv', index=False, header=False)
+
+# TODO split this into funciton file and opt file as well! Save this two-variable case as instructive example :)

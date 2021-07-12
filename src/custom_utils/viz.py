@@ -163,7 +163,7 @@ def learning(opt, log, W_true):
     d = list(range(len(log['losses'][0])))
     var_cols = [str(i) for i in d]
 
-    # fit
+    # NLL fit
     df = pd.concat((pd.DataFrame(log['losses'], columns=var_cols), pd.DataFrame(log['iter'], columns=['iter'])), axis=1)
     melted = pd.melt(df, id_vars=['iter'], value_vars=var_cols, value_name='NLL')
     sns.lineplot(data=melted, x='iter', y='NLL', hue='variable')
@@ -171,12 +171,16 @@ def learning(opt, log, W_true):
     plt.savefig(opt.out_dir + '/lc.png')
     plt.close('all')
 
+    # cycle penalty
+    plt.plot(log['iter'], log['cycle_penalty'])
+    plt.savefig(opt.out_dir + 'cycle_penalty.png')
+    plt.close('all')
+
     # edges
     var_cols = [str(i) for i in range(len(d)**2)]
     df = pd.concat((pd.DataFrame([np.ravel(i) for i in log['mat']], columns=var_cols), pd.DataFrame(log['iter'], columns=['Iteration'])), axis=1)
     melted = pd.melt(df, id_vars=['Iteration'], value_vars=var_cols, value_name='Edge')
     color_dict = {str(idx): 'green' if i!=0 else 'red' for idx, i in enumerate(W_true.flatten())}
-    # melted['edges'] = melted['variable'].replace(color_dict)
     sns.lineplot(data=melted, x='Iteration', y='Edge', hue='variable', palette=color_dict)
     plt.axhline(y=opt.zombie_threshold, color='k', linestyle='--')
     plt.legend('', frameon=False)
@@ -204,6 +208,7 @@ def model_fit(opt, model, X):
         sns.scatterplot(x=input[:, idx].ravel(), y=i.numpy().ravel(), ax=ax[idx], label='model', color='blue', s=1)
         ax[idx].legend()
     plt.subplots_adjust(wspace=.1)
+    plt.tight_layout()
     plt.savefig(opt.out_dir + '/fit.png')
     plt.close('all')
 
@@ -222,30 +227,40 @@ def conditionals(opt, model, X):
         sns.kdeplot(data=X[:, idx], ax=ax[idx], label='gt', color='blue')
         sns.kdeplot(data=i.numpy(), ax=ax[idx], label='fit', color='orange')
         ax[idx].legend()
+        ax[idx].set_title(str(idx))
     plt.subplots_adjust(wspace=.1)
     plt.tight_layout()
     plt.savefig(opt.out_dir + '/dist.png')
     plt.close('all')
 
-# TODO this is crappy af
-# TODO ideally, show any cause-effect link...
+
 def bivariate(opt, X, targets, int_lens):
     n = X.shape[0]
-    for idx, i in enumerate(targets):
-        n_before = max(0, sum(int_lens[:i]))
-        # interventional part
-        sns.scatterplot(x=X[n_before:n_before+int_lens[idx], i], 
-                        y=X[n_before:n_before+int_lens[idx], i-1])
-        # observational part
-        mask = np.ones(n)
-        mask[n_before:n_before+int_lens[idx]] = 0.
-        mask = mask.astype(bool)
-        sns.scatterplot(x=X[mask, i], 
-                        y=X[mask, i-1])
-    plt.xlabel('Cause')
-    plt.ylabel('Effect')
-    plt.savefig(opt.out_dir + '/bivariate.png')
-    plt.close('all')
+
+    # TODO show all real edges
+    edges = opt.W_true.nonzero()
+
+    # TODO
+    # one plot per edge
+    edge_indices = zip(edges[0], edges[1])
+    for start, end in edge_indices:
+        # one color per interventional setting
+        for idx, i in enumerate(targets):
+            n_before = sum(int_lens[:idx])
+            # interventional part
+            sns.scatterplot(x=X[n_before:n_before+int_lens[idx], start], 
+                            y=X[n_before:n_before+int_lens[idx], end], s=2, alpha=0.3, label='int')
+            # observational part
+            mask = np.ones(n)
+            mask[n_before:n_before+int_lens[idx]] = 0.
+            mask = mask.astype(bool)
+            sns.scatterplot(x=X[mask, start], 
+                            y=X[mask, end], s=2, alpha=0.3, label='obs')
+        plt.xlabel(f'Cause {start}')
+        plt.ylabel(f'Effect {end}')
+        plt.legend(markerscale=4)
+        plt.savefig(opt.out_dir + f'/bivariate_{start}->{end}.png')
+        plt.close('all')
 # -------------------SEQ END------------------------------
 
 

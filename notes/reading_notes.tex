@@ -114,6 +114,9 @@ Observations
     \item Learning rate is quite important, decides whether we race edges against each other or just send certain ones to zero almost instantly
     \item Remove zombie edges from acyclicity violation, too. They can just drag down good edges when penalty goes high very quickly
     \item The fact that the net is trying to fit the zeros induced by the gumbel adjacency looks to be a real problem, especially in an edge race. Maybe we should just predict zero in these cases without using the network? For multiple inputs, if some were masked out, we should indicate somehow that we didn't have this value (not the same as zero)?
+    \item Confirmed: Even without any cycles, we can lose perfectly good edges if they just happen to have a rather low value. Is this because missingness isn't indicated??
+    \item Missingness indicator seems nice, but somehow we can't seem to fit the sinus curve well anymore
+    \item Seems like we have a bit of a different case where it's not the intervention that's imperfect but rather the intervention changing the causal relationship!
 \end{enumerate}
 
 \subsection{Which interventions to choose from}

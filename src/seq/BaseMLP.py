@@ -8,7 +8,8 @@ import numpy as np
 
 
 class BaseMLP(nn.Module):
-    def __init__(self, d, num_layers, hid_dim, num_params, zombie_threshold,    nonlin="leaky-relu", intervention=False, intervention_type="perfect",intervention_knowledge="known", num_regimes=1, max_adj_entry=np.inf):
+    def __init__(self, d, num_layers, hid_dim, num_params, zombie_threshold,
+    indicate_missingness=False, nonlin="leaky-relu", intervention=False, custom_gumbel_init=False, intervention_type="perfect",intervention_knowledge="known", num_regimes=1, max_adj_entry=np.inf):
         """
         :param int d: number of variables in the system
         :param int num_layers: number of hidden layers
@@ -33,6 +34,7 @@ class BaseMLP(nn.Module):
         self.num_regimes = num_regimes
         self.zombie_threshold = zombie_threshold
         self.max_adj_entry = torch.tensor(max_adj_entry)
+        self.indicate_missingness = indicate_missingness
 
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
@@ -46,27 +48,41 @@ class BaseMLP(nn.Module):
 
         # initialize current adjacency matrix
         self.adjacency = torch.ones((self.d, self.d)) - torch.eye(self.d)
-        self.gumbel_adjacency = GumbelAdjacency(self.d)
+        self.gumbel_adjacency = GumbelAdjacency(self.d, custom_gumbel_init)
 
         self.zero_weights_ratio = 0.
         self.numel_weights = 0
 
+        # generate parameters
         for i in range(self.num_layers + 1):
             in_dim = self.hid_dim
             out_dim = self.hid_dim
 
-            # first layer
+            # first layer: inputs and missingness indicators
             if i == 0:
-                in_dim = self.d
+                in_dim = self.d * (2 if self.indicate_missingness else 1)
 
             # last layer
             if i == self.num_layers:
                 out_dim = self.num_params
 
-            # generate one MLP per conditional
-            self.weights.append(nn.Parameter(torch.zeros(self.d, out_dim, in_dim)))
-            self.biases.append(nn.Parameter(torch.zeros(self.d, out_dim)))
-            self.numel_weights += self.d * out_dim * in_dim
+            if self.intervention_type == 'perfect':
+                # generate one MLP per conditional
+                self.weights.append(nn.Parameter(torch.zeros(self.d, out_dim, in_dim)))
+                self.biases.append(nn.Parameter(torch.zeros(self.d, out_dim)))
+                self.numel_weights += self.d * out_dim * in_dim
+
+            # if interv are imperfect or unknown, generate 'num_regimes' MLPs per conditional
+            elif self.intervention_type == 'imperfect':
+                self.weights.append(nn.Parameter(torch.zeros(self.d,
+                                                             out_dim, in_dim,
+                                                             self.num_regimes)))
+                self.biases.append(nn.Parameter(torch.zeros(self.d, out_dim,
+                                                            self.num_regimes)))
+                self.numel_weights += self.d * out_dim * in_dim * self.num_regimes
+            else:
+                if self.intervention_type not in ['perfect', 'imperfect']:
+                    raise ValueError(f'{self.intervention_type} is not a valid for intervention type')
         self.reset_params()
 
     def get_interv_w(self, bs, regime):
@@ -100,6 +116,7 @@ class BaseMLP(nn.Module):
         num_zero_weights = 0
 
         # TODO walk through computation once more to make sure it's all right
+        # TODO what to do about missingness???
         for layer in range(self.num_layers + 1):
             # First layer, apply the mask
             if layer == 0:
@@ -109,20 +126,24 @@ class BaseMLP(nn.Module):
                 if nomask:  # get unmasked predictions
                     M = torch.ones_like(M)
 
-                # TODO I can't help but think we might have the matrix orientations wrong???
-                # TODO check the weight orientations, too
-                # TODO check all the other einsums as well!
-                # bjt should be btj ???
-                # ljt should be ltj ???
+                if self.indicate_missingness:
+                    # TODO is this a good way to handle missingness??
+                    # expand M to fiter mask and missingness indicator
+                    M = torch.cat((M, M), axis=1)
+                    # expand adj and x with missingness dummies
+                    adj = torch.cat((adj, torch.ones_like(adj)), axis=1)
+                    x = torch.cat((x, torch.ones_like(x)), axis=1)
+
                 if not self.intervention:
                     x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], M, adj, x) + biases[layer]
                 elif self.intervention_type == "perfect" and self.intervention_knowledge == "known":
                     # the mask is not applied here, it is applied in the loss term
                     x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], M, adj, x) + biases[layer]
-                elif self.intervention_type == "custom":
-                    # use mask additionally to M, do not apply in the loss term!
+                elif self.intervention_type == "imperfect" and self.intervention_knowledge == 'known':
+                    # use a different network for each interventional setting!
                     myM = mask.unsqueeze(2) * M
                     x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], myM, adj, x) + biases[layer]
+                # TODO disentangle into two cases, one with perfect interventions but effect change, and one with their interpretation!
                 else:
                     assert mask is not None, 'Mask is not set!'
                     assert regime is not None, 'Regime is not set!'
@@ -273,3 +294,9 @@ class BaseMLP(nn.Module):
 
     def get_distribution(self, density_params):
         raise NotImplementedError
+
+
+# TODO think about the 'perfect' vs. 'imperfect' interventions once more!
+# The 'imperfect' interventions are their code word for 'completely different relationship'
+# TODO but, unlike in their reasoning, if only the relationship changes, we can still use the same mask as before! (no need to follow their funky masking business)
+# (we do not really need to deal with unknown targets)

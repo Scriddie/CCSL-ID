@@ -132,12 +132,12 @@ class GumbelAdjacency(torch.nn.Module):
     Gumbel straigth-through estimator.
     :param int num_vars: number of variables
     """
-    def __init__(self, num_vars):
+    def __init__(self, num_vars, custom_init=False):
         super(GumbelAdjacency, self).__init__()
         self.num_vars = num_vars
         self.log_alpha = torch.nn.Parameter(torch.zeros((num_vars, num_vars)))
         self.uniform = torch.distributions.uniform.Uniform(0, 1)
-        self.reset_parameters()
+        self.reset_parameters(custom_init)
 
     def forward(self, bs, tau=1, drawhard=True):
         adj = gumbel_sigmoid(self.log_alpha, self.uniform, bs, tau=tau, hard=drawhard) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
@@ -147,10 +147,13 @@ class GumbelAdjacency(torch.nn.Module):
         """Returns probability of getting one"""
         return torch.sigmoid(self.log_alpha) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
 
-    def reset_parameters(self):
+    def reset_parameters(self, custom_init=False):
         torch.nn.init.constant_(self.log_alpha, 5.)
-        # TODO just a test hack rn
-        # self.log_alpha.
+        if custom_init:
+            # shows that even without any cicles and perfect fit, edges can disappear!
+            self.log_alpha.data = torch.tensor([[-12.,  0.5,  0.5],
+                                                [-12., -12.,  0.5],
+                                                [-12., -12., -12.]])
 
 #--------------------------------Gumbel END-------------------------------
 
@@ -262,15 +265,14 @@ def train_nll(opt, model, df, W, mask, loss_fn):
     delta_gamma = -np.inf
 
     optim = torch.optim.Adam(model.parameters(), lr=opt.LR)
-    log = {'losses': [], 'iter': [], 'mat': []}
+    log = {'losses': [], 'cycle_penalty': [], 'iter': [], 'mat': []}
 
     # TODO add a sparsity penalty
     for i in range(opt.ITER):
         # adjacency matrix filtered for zombie edges
         w_adj = model.gumbel_adjacency.get_proba()
         w_adj *= model.adjacency
-        # TODO eliminate zombies using model.adjacency_matrix??
-        # acyclicity violation
+        # acycli    city violation
         sparsity_penalty = opt.sparsity * torch.norm(w_adj)
         h = compute_dag_constraint(w_adj) / constraint_normalization
         # compute augmented langrangian
@@ -284,7 +286,8 @@ def train_nll(opt, model, df, W, mask, loss_fn):
         if i < opt.foreplay_iter:
             aug_lagrangian = nll
         else:
-            aug_lagrangian = (nll + lagrangian + 0.5 * mu * augmentation + sparsity_penalty)
+            cycle_penalty = lagrangian + 0.5 * mu * augmentation
+            aug_lagrangian = (nll + cycle_penalty + sparsity_penalty)
         aug_lagrangian.backward()
         optim.step()
         model.adjust_params()
@@ -326,6 +329,7 @@ def train_nll(opt, model, df, W, mask, loss_fn):
         aug_lagrangian = aug_lagrangian.item()
         if (i % int(opt.REC_FREQ) == 0) or (i == (opt.ITER - 1)):
             log['losses'].append(np.mean(losses.detach().numpy(), axis=0))
+            log['cycle_penalty'].append(cycle_penalty.detach().item())
             # log['marginal'].append(nll_marg)
             log['iter'].append(i)
             print(f'Iter {i}, NLL: {aug_lagrangian}\t'
@@ -347,12 +351,12 @@ def train_nll(opt, model, df, W, mask, loss_fn):
     print()
     return log
 
-# TODO gamma and mu stop increasing from pretty early on!
-# TODO the sigmoids saturate too much, even in the very end we have 2-cycles???
-# TODO just set a max for any sigmoid entry?
+
 # TODO log the different loss components
+# TODO log edge grad norms same way as edges themselves!
 # TODO show the different distributions in dist.png
 
+# ---
 # TODO in this last one, why is the last edge still falling? doesn't make any sense!
 # TODO there is something wrong with the gradients in the last stage!
-# TODO log edge grad norms same way as edges themselves!
+# TODO maybe it's really because of the supergraph edge that's confusing the algo??

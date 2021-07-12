@@ -16,10 +16,10 @@ def get_opt():
     # plotting
     opt.plot_freq = 1000
     # dirs
-    opt.data_dir = os.path.join('src', 'seq', 'data', '3chain')
+    opt.data_dir = os.path.join('src', 'seq', 'data', 'sachs')
     opt.out_dir = os.path.join(opt.data_dir, 'exp')
     # network
-    opt.n_in = 3
+    opt.n_in = 2
     opt.n_layers = 3
     opt.n_hidden = 16
     # training
@@ -38,6 +38,7 @@ def get_opt():
     opt.sparsity = 0.  # see if zombie edges provide better regularization
     opt.zombie_threshold = 0.05
     opt.max_adj_entry = 5.
+    opt.indicate_missingness = False
     # save opt
     utils.snap(opt, fname='exp_options.txt')
     return opt
@@ -62,9 +63,10 @@ if __name__ == '__main__':
         num_params=1,
         zombie_threshold=opt.zombie_threshold,
         intervention=True,
-        intervention_tpye='perfect',
-        intervention_knowledge='known'
+        intervention_type='perfect',
+        intervention_knowledge='known',
         max_adj_entry=opt.max_adj_entry,
+        indicate_missingness=opt.indicate_missingness,
     )
     log = mvp.train_nll(opt, model, data, dag, mask, loss_fn=mvp.gauss_nll)
     
