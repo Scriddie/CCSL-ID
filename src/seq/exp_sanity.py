@@ -9,14 +9,15 @@ import BaseMLP
 import pickle as pk
 import custom_utils.viz as viz
 from mvp import analytic
+import numpy as np
 
 
 def get_opt():
     opt = Namespace()
     # plotting
-    opt.plot_freq = 1000
+    opt.plot_freq = 500
     # dirs
-    opt.data_dir = os.path.join('src', 'seq', 'data', 'sachs')
+    opt.data_dir = os.path.join('src', 'seq', 'data', '3chain')
     opt.out_dir = os.path.join(opt.data_dir, 'exp')
     # network
     opt.n_in = 2
@@ -39,6 +40,7 @@ def get_opt():
     opt.zombie_threshold = 0.05
     opt.max_adj_entry = 5.
     opt.indicate_missingness = False
+    opt.intervention_type = 'perfect' # ['perfect', 'imperfect', 'change']
     # save opt
     utils.snap(opt, fname='exp_options.txt')
     return opt
@@ -63,12 +65,22 @@ if __name__ == '__main__':
         num_params=1,
         zombie_threshold=opt.zombie_threshold,
         intervention=True,
-        intervention_type='perfect',
+        intervention_type=opt.intervention_type,
         intervention_knowledge='known',
         max_adj_entry=opt.max_adj_entry,
         indicate_missingness=opt.indicate_missingness,
+        num_regimes=len(np.unique(regimes))
     )
-    log = mvp.train_nll(opt, model, data, dag, mask, loss_fn=mvp.gauss_nll)
+    # TODO make regimes a nice mask or something?
+    log = mvp.train_nll(
+        opt, 
+        model, 
+        data, 
+        dag, 
+        mask, 
+        regimes=regimes, 
+        loss_fn=mvp.gauss_nll
+    )
     
     # save log
     with open(f'{opt.out_dir}/log.pk', 'wb') as f:
@@ -79,22 +91,14 @@ if __name__ == '__main__':
     # # anti-causal model evaluation on sample
     # analytic(data, dag.T, lambda x: 1/x)
 
-# TODO big problem? standardization required for fair comparison of marginals.
-# BUT: standardization results in overlap in different value ranges???
-
-# TODO
-# Zombie edges might still be killing some real ones through acyclicity constraint?
-# 1) Should I remove zombie edges from acyclicity constraint as well?
-# 2) Check that we are using the right data in the right way!
-# 3) By the end I am losing a lot of true edges. Anything to be done about this?
-# are we still increasing the penalties too fast?
-
 # TODO put on the cluster, compare our results to theirs, separate scaling from zombie threshold
-
-# TODO prepare a 3 chain exp with sinus curves, check if zombie reg works
 
 # TODO could part of the problem be that we are taking away too many inputs from the network simultaneously?
 
 # TODO is there some connection to spectral biases?
 
-# TODO fix bivariate plot
+# TODO everything looks perfect. Why are we losing the wrong edge???
+# TODO only obs data, fit is not that good... density is kind of off...
+# why is the distribution such nonsense when the fit looks perfect???
+
+# TODO currently we can not even learn the simple observational case... what's the matter here?? something about regime etc.??

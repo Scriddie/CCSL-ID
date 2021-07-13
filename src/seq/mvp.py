@@ -171,16 +171,16 @@ def read(opt):
     except:
         print('Warning: No interventions found')
     mask = pd.DataFrame(mask, columns=data.columns)
-    regimes = pd.read_csv(os.path.join(opt.data_dir, 'regime1.csv'), header=None)
+    regimes = pd.read_csv(os.path.join(opt.data_dir, 'regime1.csv'), header=None).values
     return dag, data, mask, regimes
 
 
-def gauss_nll(X, model, mask):
+def gauss_nll(X, model, mask, regimes):
     d = X.shape[1]
     losses = torch.zeros_like(X)
     if mask is not None:
         mask = (mask > 0).values.squeeze()
-    density_params = model.forward(X)
+    density_params = model.forward(X, regimes=regimes)
     for i in range(d):
         # estimate conditional mu
         if density_params[0].shape[1] == 1:
@@ -211,7 +211,7 @@ def gauss_nll(X, model, mask):
             log_prob_pi_y = log_prob_y + torch.log(pi)
             loss = -torch.logsumexp(log_prob_pi_y, dim=1)
             losses[:, i] = loss
-    return losses
+    return losses, density_params
 
 
 def analytic():
@@ -220,7 +220,7 @@ def analytic():
     return nll
 
 
-def train_nll(opt, model, df, W, mask, loss_fn):
+def train_nll(opt, model, df, W, mask, regimes, loss_fn):
     """ 
     Train model in a given direction.
     For now only bivariate case!
@@ -281,7 +281,7 @@ def train_nll(opt, model, df, W, mask, loss_fn):
 
         #loss differentiation
         optim.zero_grad() 
-        losses = loss_fn(X, model, mask)
+        losses, density_params = loss_fn(X, model, mask, regimes)
         nll = torch.mean(torch.sum(losses, axis=1))
         if i < opt.foreplay_iter:
             aug_lagrangian = nll
@@ -343,8 +343,8 @@ def train_nll(opt, model, df, W, mask, loss_fn):
         # viz progress
         if i % opt.plot_freq == 0:
             viz.learning(opt, log, W)
-            viz.conditionals(opt, model, X)
-            viz.model_fit(opt, model, X)
+            viz.conditionals(opt, X, mask.values, [i.detach().numpy() for i in density_params])
+            viz.model_fit(opt, model, X, regimes)
             viz.mat(opt, log['mat'][-1])
             # TODO save graph as heatmap
 
@@ -352,10 +352,7 @@ def train_nll(opt, model, df, W, mask, loss_fn):
     return log
 
 
-# TODO log the different loss components
-# TODO log edge grad norms same way as edges themselves!
 # TODO show the different distributions in dist.png
-
 # ---
 # TODO in this last one, why is the last edge still falling? doesn't make any sense!
 # TODO there is something wrong with the gradients in the last stage!

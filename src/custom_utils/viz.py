@@ -9,7 +9,6 @@ from pathlib import Path
 from networkx.drawing.nx_agraph import graphviz_layout
 from argparse import Namespace
 
-
 # -------------------MDN START------------------------------
 
 def viz_marginal(opt, model, dgp, polarity=''):
@@ -173,7 +172,9 @@ def learning(opt, log, W_true):
 
     # cycle penalty
     plt.plot(log['iter'], log['cycle_penalty'])
-    plt.savefig(opt.out_dir + 'cycle_penalty.png')
+    plt.xlabel('Iteration')
+    plt.ylabel("Acyclicity Penalty")
+    plt.savefig(opt.out_dir + '/cycle_penalty.png')
     plt.close('all')
 
     # edges
@@ -193,39 +194,40 @@ def mat(opt, mat):
     plt.savefig(opt.out_dir+'/mat.png')
     plt.close('all')
 
-def model_fit(opt, model, X):
+# TODO I can't see the different networks yet?
+def model_fit(opt, model, X, regimes):
     """ viz function fit by model """
+    n = 9999
     d = X.shape[1]
-    # some uniform
-    input = torch.tensor(np.concatenate(
-        tuple([np.linspace(-5., 5., 30000).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
-    # forward through model
-    with torch.no_grad():
-        output = model.forward(input, nomask=True)
-    # plot
     fig, ax = plt.subplots(ncols=d, nrows=1, figsize=(12, 5))
-    for idx, i in enumerate(output):
-        sns.scatterplot(x=input[:, idx].ravel(), y=i.numpy().ravel(), ax=ax[idx], label='model', color='blue', s=1)
-        ax[idx].legend()
+    for r in np.unique(regimes):
+        # some uniform
+        input = torch.tensor(np.concatenate(
+            tuple([np.linspace(-5., 5., n).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
+        temp_reg = (np.ones(n) * r).astype(int).reshape(-1, 1)
+        # forward through model
+        with torch.no_grad():
+            output = model.forward(input, nomask=True, regimes=temp_reg)
+        # plot
+        for idx, i in enumerate(output):
+            sns.scatterplot(x=input[:, idx].ravel(), y=i.numpy().ravel(), ax=ax[idx], label=f'model{r}', s=1)
+            ax[idx].legend(markerscale=4)
     plt.subplots_adjust(wspace=.1)
     plt.tight_layout()
+
     plt.savefig(opt.out_dir + '/fit.png')
     plt.close('all')
 
-def conditionals(opt, model, X):
+def conditionals(opt, X, mask, density_params):
     """ viz function fit by model """
-    # TODO don't plot the interventional data, won't have to be fit anyways!
     d = X.shape[1]
-    # some uniform
-    input = torch.zeros_like(X).uniform_(-2, 2)
-    # forward through model
-    with torch.no_grad():
-        output = model.forward(input)
-    # plot
     fig, ax = plt.subplots(ncols=d, nrows=1, figsize=(12, 5))
-    for idx, i in enumerate(output):
-        sns.kdeplot(data=X[:, idx], ax=ax[idx], label='gt', color='blue')
-        sns.kdeplot(data=i.numpy(), ax=ax[idx], label='fit', color='orange')
+    # TODO color properly
+    for idx, i in enumerate(density_params):
+        selection_mask = mask[:, idx].astype(bool)
+        sns.kdeplot(data=X[selection_mask, idx], ax=ax[idx], label='gt_obs')
+        sns.kdeplot(data=X[~selection_mask, idx], ax=ax[idx], label='gt_int')
+        sns.kdeplot(data=i, ax=ax[idx], label='fit', color='r')
         ax[idx].legend()
         ax[idx].set_title(str(idx))
     plt.subplots_adjust(wspace=.1)
@@ -236,26 +238,25 @@ def conditionals(opt, model, X):
 
 def bivariate(opt, X, targets, int_lens):
     n = X.shape[0]
-
-    # TODO show all real edges
+    # real edges
     edges = opt.W_true.nonzero()
-
-    # TODO
     # one plot per edge
     edge_indices = zip(edges[0], edges[1])
     for start, end in edge_indices:
+        n_before = 0
+        idx = 0
         # one color per interventional setting
         for idx, i in enumerate(targets):
             n_before = sum(int_lens[:idx])
             # interventional part
             sns.scatterplot(x=X[n_before:n_before+int_lens[idx], start], 
                             y=X[n_before:n_before+int_lens[idx], end], s=2, alpha=0.3, label='int')
-            # observational part
-            mask = np.ones(n)
-            mask[n_before:n_before+int_lens[idx]] = 0.
-            mask = mask.astype(bool)
-            sns.scatterplot(x=X[mask, start], 
-                            y=X[mask, end], s=2, alpha=0.3, label='obs')
+        # observational part
+        mask = np.ones(n)
+        mask[:sum(int_lens)] = 0.
+        mask = mask.astype(bool)
+        sns.scatterplot(x=X[mask, start], 
+                        y=X[mask, end], s=2, alpha=0.3, label='obs')
         plt.xlabel(f'Cause {start}')
         plt.ylabel(f'Effect {end}')
         plt.legend(markerscale=4)

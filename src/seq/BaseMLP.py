@@ -8,8 +8,20 @@ import numpy as np
 
 
 class BaseMLP(nn.Module):
-    def __init__(self, d, num_layers, hid_dim, num_params, zombie_threshold,
-    indicate_missingness=False, nonlin="leaky-relu", intervention=False, custom_gumbel_init=False, intervention_type="perfect",intervention_knowledge="known", num_regimes=1, max_adj_entry=np.inf):
+    def __init__(self, 
+                 d, 
+                 num_layers, 
+                 hid_dim, 
+                 num_params, 
+                 zombie_threshold,
+                 num_regimes,
+                 intervention_type,
+                 intervention_knowledge, 
+                 indicate_missingness=False, 
+                 nonlin="leaky-relu", 
+                 intervention=False, 
+                 custom_gumbel_init=False, 
+                 max_adj_entry=np.inf):
         """
         :param int d: number of variables in the system
         :param int num_layers: number of hidden layers
@@ -73,7 +85,7 @@ class BaseMLP(nn.Module):
                 self.numel_weights += self.d * out_dim * in_dim
 
             # if interv are imperfect or unknown, generate 'num_regimes' MLPs per conditional
-            elif self.intervention_type == 'imperfect':
+            elif self.intervention_type in ['imperfect', 'change']:
                 self.weights.append(nn.Parameter(torch.zeros(self.d,
                                                              out_dim, in_dim,
                                                              self.num_regimes)))
@@ -81,7 +93,7 @@ class BaseMLP(nn.Module):
                                                             self.num_regimes)))
                 self.numel_weights += self.d * out_dim * in_dim * self.num_regimes
             else:
-                if self.intervention_type not in ['perfect', 'imperfect']:
+                if self.intervention_type not in ['perfect', 'imperfect', 'change']:
                     raise ValueError(f'{self.intervention_type} is not a valid for intervention type')
         self.reset_params()
 
@@ -100,7 +112,7 @@ class BaseMLP(nn.Module):
             self.gumbel_adjacency.log_alpha.data = torch.where(vals>self.   max_adj_entry, self.max_adj_entry, vals)
 
 
-    def forward(self, x, mask=None, nomask=False):
+    def forward(self, x, nomask=False, mask=None, regimes=None):
         # TODO we are not using get_weights for now
         weights = self.weights
         biases = self.biases
@@ -109,18 +121,16 @@ class BaseMLP(nn.Module):
         :param weights: list of lists. ith list contains weights for ith MLP
         :param biases: list of lists. ith list contains biases for ith MLP
         :param mask: tensor, batch_size x d
-        :param regime: np.ndarray, shape=(batch_size,)
+        :param regimes: np.ndarray, shape=(batch_size,)
         :return: batch_size x d * num_params, the parameters of each variable conditional
         """
         bs = x.size(0)
         num_zero_weights = 0
 
-        # TODO walk through computation once more to make sure it's all right
-        # TODO what to do about missingness???
         for layer in range(self.num_layers + 1):
             # First layer, apply the mask
             if layer == 0:
-                # sample the matrix M that will be applied as a mask at the MLP input
+                # sample M to mask MLP inputs
                 adj = self.adjacency.unsqueeze(0)
                 M = self.gumbel_adjacency(bs)
                 if nomask:  # get unmasked predictions
@@ -134,51 +144,31 @@ class BaseMLP(nn.Module):
                     adj = torch.cat((adj, torch.ones_like(adj)), axis=1)
                     x = torch.cat((x, torch.ones_like(x)), axis=1)
 
-                if not self.intervention:
+                if not self.intervention or (self.intervention_type == "perfect" and self.intervention_knowledge == "known"):
+                    # mask applied in loss term
                     x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], M, adj, x) + biases[layer]
-                elif self.intervention_type == "perfect" and self.intervention_knowledge == "known":
-                    # the mask is not applied here, it is applied in the loss term
-                    x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], M, adj, x) + biases[layer]
-                elif self.intervention_type == "imperfect" and self.intervention_knowledge == 'known':
-                    # use a different network for each interventional setting!
-                    myM = mask.unsqueeze(2) * M
-                    x = torch.einsum("tij,bjt,ljt,bj->bti", weights[layer], myM, adj, x) + biases[layer]
-                # TODO disentangle into two cases, one with perfect interventions but effect change, and one with their interpretation!
+                elif self.intervention_type == "change" and self.intervention_knowledge == 'known':
+                    # mask applied in loss term, but different MLP per regime
+                    assert regimes is not None, 'Regime is not set!'
+                    regimes = torch.from_numpy(regimes)
+                    # R -> bs x d (we do not use a mask unlike them)
+                    R = torch.zeros(regimes.shape[0], self.num_regimes).scatter_(1, regimes, 1)
+                    x = torch.einsum('tijk, bk, bjt, ljt, bj -> bti',
+                                     weights[layer], R, M, adj, x)
+                    x += torch.einsum('ijk, bk -> bij', biases[layer], R)
                 else:
-                    assert mask is not None, 'Mask is not set!'
-                    assert regime is not None, 'Regime is not set!'
-
-                    regime = torch.from_numpy(regime)
-                    R = mask
-
-                    if self.intervention_knowledge == "unknown":
-                        # sample the matrix R and totally mask the
-                        # input of MLPs that are intervened on (in R)
-                        self.interv_w = self.gumbel_interv_w(bs, regime)
-                        R = self.interv_w
-                        M = torch.einsum("bjt,bt->bjt", M, R)
-
-                    # transform the mask format from bs x d
-                    # to bs x d x num_regimes, in order to select the
-                    # MLP parameter corresponding to the regime
-                    R = (1 - R).type(torch.int64)  # 1 if no intervention
-                    R = R * regime.unsqueeze(1)
-                    R = torch.zeros(R.size(0), self.d, self.num_regimes).scatter_(2, R.unsqueeze(2), 1)  # put one at 0/regime
-
-                    # apply the first MLP layer with the mask M and the
-                    # parameters 'selected' by R
-                    w = torch.einsum('tijk, btk -> btij', weights[layer], R)
-                    x = torch.einsum("btij, bjt, ljt, bj -> bti", w, M, adj, x)
-                    x += torch.einsum("btk,tik->bti", R, biases[layer])
+                    raise ValueError('No such configuration')
 
             # 2nd layer and more
             else:
-                if self.intervention and (self.intervention_type == "imperfect" or self.intervention_knowledge == "unknown"):
-                    w = torch.einsum('tijk, btk -> btij', weights[layer], R)
-                    x = torch.einsum("btij, btj -> bti", w, x)
-                    x += torch.einsum("btk,tik->bti", R, biases[layer])
+                if not self.intervention or (self.intervention_type == "perfect" and self.intervention_knowledge == "known"):
+                    x = torch.einsum("tij, btj -> bti", weights[layer], x) + biases[layer]
+                elif self.intervention_type == "change" and self.intervention_knowledge == 'known':
+                    x = torch.einsum("tijk, bk, btj -> bti", 
+                                     weights[layer], R, x)
+                    x += torch.einsum('ijk, bk-> bij', biases[layer], R)
                 else:
-                    x = torch.einsum("tij,btj->bti", weights[layer], x) + biases[layer]
+                    raise ValueError('Invalid configuration')
 
             # count number of zeros
             num_zero_weights += weights[layer].numel() - weights[layer].nonzero().size(0)
