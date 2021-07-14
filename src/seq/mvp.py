@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import torch
 import os
+from datetime import datetime
 from transfer.gmm import GaussianMixture
 
 import torch
@@ -132,11 +133,12 @@ class GumbelAdjacency(torch.nn.Module):
     Gumbel straigth-through estimator.
     :param int num_vars: number of variables
     """
-    def __init__(self, num_vars, custom_init=False):
+    def __init__(self, num_vars, start_adj_entry, custom_init=False):
         super(GumbelAdjacency, self).__init__()
         self.num_vars = num_vars
         self.log_alpha = torch.nn.Parameter(torch.zeros((num_vars, num_vars)))
         self.uniform = torch.distributions.uniform.Uniform(0, 1)
+        self.start_adj_entry = start_adj_entry
         self.reset_parameters(custom_init)
 
     def forward(self, bs, tau=1, drawhard=True):
@@ -148,7 +150,7 @@ class GumbelAdjacency(torch.nn.Module):
         return torch.sigmoid(self.log_alpha) * (torch.ones(self.num_vars, self.num_vars) - torch.eye(self.num_vars))
 
     def reset_parameters(self, custom_init=False):
-        torch.nn.init.constant_(self.log_alpha, 5.)
+        torch.nn.init.constant_(self.log_alpha, self.start_adj_entry)
         if custom_init:
             # shows that even without any cicles and perfect fit, edges can disappear!
             self.log_alpha.data = torch.tensor([[-12.,  0.5,  0.5],
@@ -175,12 +177,12 @@ def read(opt):
     return dag, data, mask, regimes
 
 
-def gauss_nll(X, model, mask, regimes):
+def gauss_nll(X, model, mask, regimes, mode):
     d = X.shape[1]
     losses = torch.zeros_like(X)
     if mask is not None:
         mask = (mask > 0).values.squeeze()
-    density_params = model.forward(X, regimes=regimes)
+    density_params = model.forward(X, regimes=regimes, mode=mode)
     for i in range(d):
         # estimate conditional mu
         if density_params[0].shape[1] == 1:
@@ -259,20 +261,28 @@ def train_nll(opt, model, df, W, mask, regimes, loss_fn):
     mus = []
     gammas = []
     ###
+    # TODO do we need the constraint normalization???
     with torch.no_grad():
         full_adjacency = torch.ones((model.d, model.d)) - torch.eye(model.d)
         constraint_normalization = compute_dag_constraint(full_adjacency).item()
     delta_gamma = -np.inf
 
     optim = torch.optim.Adam(model.parameters(), lr=opt.LR)
-    log = {'losses': [], 'cycle_penalty': [], 'iter': [], 'mat': []}
+    log = {
+        'losses': [], 
+        'cycle_penalty': [], 
+        'mu': [],
+        'gamma': [],
+        'iter': [], 
+        'mat': [],
+    }
 
     # TODO add a sparsity penalty
     for i in range(opt.ITER):
         # adjacency matrix filtered for zombie edges
         w_adj = model.gumbel_adjacency.get_proba()
         w_adj *= model.adjacency
-        # acycli    city violation
+        # acyclicity violation
         sparsity_penalty = opt.sparsity * torch.norm(w_adj)
         h = compute_dag_constraint(w_adj) / constraint_normalization
         # compute augmented langrangian
@@ -280,10 +290,12 @@ def train_nll(opt, model, df, W, mask, regimes, loss_fn):
         augmentation = h ** 2
 
         #loss differentiation
-        optim.zero_grad() 
-        losses, density_params = loss_fn(X, model, mask, regimes)
+        optim.zero_grad()
+        mode = 'pretrain' if i < opt.pretrain_iter else 'train'
+        losses, density_params = loss_fn(X, model, mask, regimes, mode)
         nll = torch.mean(torch.sum(losses, axis=1))
-        if i < opt.foreplay_iter:
+        if i < opt.pretrain_iter:
+            cycle_penalty = torch.zeros(1)
             aug_lagrangian = nll
         else:
             cycle_penalty = lagrangian + 0.5 * mu * augmentation
@@ -301,20 +313,19 @@ def train_nll(opt, model, df, W, mask, regimes, loss_fn):
             t0     = aug_lagrangians_val[-3]
             t_half = aug_lagrangians_val[-2]
             t1     = aug_lagrangians_val[-1]
-            # if the validation loss went up and down, do not update
             if not (min(t0, t1) < t_half < max(t0, t1)):
-                delta_gamma = -np.inf
+                # if the validation loss went up and down, do not update
+                delta_gamma = None
             else:
                 delta_gamma = (t1 - t0) / opt.stop_crit_win
         else:
-            delta_gamma = -np.inf  # do not update gamma nor mu
+            delta_gamma = None  # do not update gamma nor mu
 
-        # We do not have an acyclic solution yet
+        # We do not have an acyclic solution yet; with our zombie edges, we can actually solve for full acyclicity
         constraint_violation = h.item()
-        if constraint_violation > opt.h_threshold:
-
+        if constraint_violation > 0 and delta_gamma and i >= opt.pretrain_iter:
             # we have either solved the problem or gone backwards -> penalty up
-            if abs(delta_gamma) < opt.omega_gamma or delta_gamma >= 0:
+            if delta_gamma > -opt.omega_gamma:
                 gamma += mu * constraint_violation
                 print("Updated gamma to {}".format(gamma))
 
@@ -328,8 +339,11 @@ def train_nll(opt, model, df, W, mask, regimes, loss_fn):
         # logging
         aug_lagrangian = aug_lagrangian.item()
         if (i % int(opt.REC_FREQ) == 0) or (i == (opt.ITER - 1)):
+            print(5*'-*-', datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), 5*'-*-')
             log['losses'].append(np.mean(losses.detach().numpy(), axis=0))
             log['cycle_penalty'].append(cycle_penalty.detach().item())
+            log['mu'].append(mu)
+            log['gamma'].append(gamma)
             # log['marginal'].append(nll_marg)
             log['iter'].append(i)
             print(f'Iter {i}, NLL: {aug_lagrangian}\t'
@@ -346,14 +360,12 @@ def train_nll(opt, model, df, W, mask, regimes, loss_fn):
             viz.conditionals(opt, X, mask.values, [i.detach().numpy() for i in density_params])
             viz.model_fit(opt, model, X, regimes)
             viz.mat(opt, log['mat'][-1])
-            # TODO save graph as heatmap
+            pass
 
     print()
     return log
 
 
-# TODO show the different distributions in dist.png
-# ---
 # TODO in this last one, why is the last edge still falling? doesn't make any sense!
 # TODO there is something wrong with the gradients in the last stage!
 # TODO maybe it's really because of the supergraph edge that's confusing the algo??

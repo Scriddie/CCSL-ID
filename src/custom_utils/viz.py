@@ -177,6 +177,15 @@ def learning(opt, log, W_true):
     plt.savefig(opt.out_dir + '/cycle_penalty.png')
     plt.close('all')
 
+    # lagrangian params
+    plt.plot(log['iter'], log['mu'], label='mu')
+    plt.plot(log['iter'], log['gamma'], label='gamma')
+    plt.xlabel('Iteration')
+    plt.ylabel('Lagrangian Parameters')
+    plt.legend()
+    plt.savefig(opt.out_dir + '/lagrangian.png')
+    plt.close('all')
+
     # edges
     var_cols = [str(i) for i in range(len(d)**2)]
     df = pd.concat((pd.DataFrame([np.ravel(i) for i in log['mat']], columns=var_cols), pd.DataFrame(log['iter'], columns=['Iteration'])), axis=1)
@@ -194,16 +203,16 @@ def mat(opt, mat):
     plt.savefig(opt.out_dir+'/mat.png')
     plt.close('all')
 
-# TODO I can't see the different networks yet?
+# TODO Ideally with indicate missingess, test for some indications?
 def model_fit(opt, model, X, regimes):
     """ viz function fit by model """
     n = 9999
     d = X.shape[1]
     fig, ax = plt.subplots(ncols=d, nrows=1, figsize=(12, 5))
+    input = torch.tensor(np.concatenate(
+        tuple([np.linspace(-10., 10., n).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
     for r in np.unique(regimes):
         # some uniform
-        input = torch.tensor(np.concatenate(
-            tuple([np.linspace(-5., 5., n).reshape(-1, 1) for _ in range(d)]), axis=1), dtype=torch.float32)
         temp_reg = (np.ones(n) * r).astype(int).reshape(-1, 1)
         # forward through model
         with torch.no_grad():
@@ -212,9 +221,11 @@ def model_fit(opt, model, X, regimes):
         for idx, i in enumerate(output):
             sns.scatterplot(x=input[:, idx].ravel(), y=i.numpy().ravel(), ax=ax[idx], label=f'model{r}', s=1)
             ax[idx].legend(markerscale=4)
+        # only one model if 'perfect'
+        if opt.intervention_type =='perfect':
+            break
     plt.subplots_adjust(wspace=.1)
     plt.tight_layout()
-
     plt.savefig(opt.out_dir + '/fit.png')
     plt.close('all')
 
@@ -238,25 +249,25 @@ def conditionals(opt, X, mask, density_params):
 
 def bivariate(opt, X, targets, int_lens):
     n = X.shape[0]
+    # prepare colors
+    hue = np.zeros(X.shape[0])
+    for idx, i in enumerate(int_lens):
+        n_before = sum(int_lens[:idx])
+        hue[n_before:n_before+i] = idx+1
     # real edges
     edges = opt.W_true.nonzero()
     # one plot per edge
     edge_indices = zip(edges[0], edges[1])
     for start, end in edge_indices:
-        n_before = 0
-        idx = 0
-        # one color per interventional setting
-        for idx, i in enumerate(targets):
-            n_before = sum(int_lens[:idx])
-            # interventional part
-            sns.scatterplot(x=X[n_before:n_before+int_lens[idx], start], 
-                            y=X[n_before:n_before+int_lens[idx], end], s=2, alpha=0.3, label='int')
-        # observational part
-        mask = np.ones(n)
-        mask[:sum(int_lens)] = 0.
-        mask = mask.astype(bool)
-        sns.scatterplot(x=X[mask, start], 
-                        y=X[mask, end], s=2, alpha=0.3, label='obs')
+        sns.jointplot(x=X[:, start], 
+                      y=X[:, end], hue=hue, s=2, alpha=0.3)
+        # # observational part
+        # if sum(int_lens) != X.shape[0]:
+        #     mask = np.ones(n)
+        #     mask[:sum(int_lens)] = 0.
+        #     mask = mask.astype(bool)
+        #     sns.jointplot(x=X[mask, start], 
+        #                   y=X[mask, end], s=2, alpha=0.3, label='obs', ax=ax)
         plt.xlabel(f'Cause {start}')
         plt.ylabel(f'Effect {end}')
         plt.legend(markerscale=4)

@@ -3,8 +3,8 @@ from data_generation_rwd import *
 
 if __name__ == '__main__':
     utils.create_folder('src/seq/data')
-    utils.overwrite_folder('src/seq/data/sachs')
-    utils.overwrite_folder('src/seq/data/sachs/figures')
+    utils.overwrite_folder('src/seq/data/sachs_MEK->ERK')
+    utils.overwrite_folder('src/seq/data/sachs_MEK->ERK/figures')
 
     opt = Namespace()
     opt.base_path = './data/sachs/Data Files/'
@@ -23,7 +23,7 @@ if __name__ == '__main__':
     opt.obs_files = ['general1']  # + ['general2']
     opt.obs_vars = ['ERK']  # ['RAF', 'ERK', 'JNK', 'P38']  # + ['PLCG']
     # TODO rename PLCG to PLC?
-    opt.out_dir = 'src/seq/data/sachs'
+    opt.out_dir = 'src/seq/data/sachs_MEK->ERK'
     opt.vars_ord = opt.int_vars + opt.obs_vars
     opt.standardize = True
     opt.standardize_globally = False

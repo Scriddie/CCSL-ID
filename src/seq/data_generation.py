@@ -29,10 +29,12 @@ import custom_utils.viz as viz
 #     dataset = dg.create_data(description, opt.W_true)
 #     return dataset.data
 
+# TODO some funky problem here...
 def generate_nonlinear(opt, target, transformation):
     """ 
     just generate a chain right now, could go for the nonlinear noise types later
     """
+    assert (opt.noise_variance[0] and opt.noise_variance[1]), 'Noise can not be zero' 
     d = len(opt.W_true)
     X = np.zeros((opt.n_obs, d))
     filled = np.zeros(d)
@@ -104,16 +106,6 @@ def create_dataset(opt, obs, targets, transformation):
                    [pd.DataFrame(i) for i in obs_data], 
                    axis=0).reset_index(drop=True)
 
-    # # TODO replace with better logic in sachs!
-    # # TODO in both, rescale interventional sections using obs mean and var!
-    # if not opt.standardize_individually:
-    #     n_int = sum([len(i) for i in int_data])
-    #     for i in range(df.values.shape[1]):
-    #         if i in targets:
-    #             df.values[n_int:, i] = standardize(df.values[n_int:, i])
-    #         else:
-    #             df.values[:, i] = standardize(df.values[:, i])
-
     # TODO check again
     if not opt.standardize_individually:
         n_int = [len(i) for i in int_data]
@@ -167,7 +159,7 @@ def create_dataset(opt, obs, targets, transformation):
     #     pk.dump(dataset, f)
 
     # snap options
-    utils.snap(opt, fname='options')
+    utils.snap(opt, fname='data_options')
 
     # visualize all the data (with appropriate colors)?)
     viz.bivariate(opt, df.values, targets, [len(i) for i in int_data])

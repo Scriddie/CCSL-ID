@@ -21,7 +21,8 @@ class BaseMLP(nn.Module):
                  nonlin="leaky-relu", 
                  intervention=False, 
                  custom_gumbel_init=False, 
-                 max_adj_entry=np.inf):
+                 max_adj_entry=np.inf,
+                 start_adj_entry=5.):
         """
         :param int d: number of variables in the system
         :param int num_layers: number of hidden layers
@@ -46,6 +47,7 @@ class BaseMLP(nn.Module):
         self.num_regimes = num_regimes
         self.zombie_threshold = zombie_threshold
         self.max_adj_entry = torch.tensor(max_adj_entry)
+        self.start_adj_entry = torch.tensor(start_adj_entry)
         self.indicate_missingness = indicate_missingness
 
         self.weights = nn.ParameterList()
@@ -60,7 +62,7 @@ class BaseMLP(nn.Module):
 
         # initialize current adjacency matrix
         self.adjacency = torch.ones((self.d, self.d)) - torch.eye(self.d)
-        self.gumbel_adjacency = GumbelAdjacency(self.d, custom_gumbel_init)
+        self.gumbel_adjacency = GumbelAdjacency(self.d, start_adj_entry, custom_gumbel_init)
 
         self.zero_weights_ratio = 0.
         self.numel_weights = 0
@@ -112,7 +114,8 @@ class BaseMLP(nn.Module):
             self.gumbel_adjacency.log_alpha.data = torch.where(vals>self.   max_adj_entry, self.max_adj_entry, vals)
 
 
-    def forward(self, x, nomask=False, mask=None, regimes=None):
+    def forward(self, x, nomask=False, mask=None, regimes=None, mode='train'):
+        assert mode in ['train', 'pretrain'], 'Unknown training mode'
         # TODO we are not using get_weights for now
         weights = self.weights
         biases = self.biases
@@ -132,9 +135,16 @@ class BaseMLP(nn.Module):
             if layer == 0:
                 # sample M to mask MLP inputs
                 adj = self.adjacency.unsqueeze(0)
+
+
                 M = self.gumbel_adjacency(bs)
-                if nomask:  # get unmasked predictions
+                if mode == 'pretrain':
+                    # put random dropout into mask
                     M = torch.ones_like(M)
+                    M.bernoulli_(0.5)
+                    # TODO little test, encode missingess as super high values
+                    # This idea doesn't really seem to fly unfortunately
+                    # M = torch.where(M==0, torch.ones_like(M)*9, M)
 
                 if self.indicate_missingness:
                     # TODO is this a good way to handle missingness??

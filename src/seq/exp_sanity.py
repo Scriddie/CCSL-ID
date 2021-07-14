@@ -15,18 +15,18 @@ import numpy as np
 def get_opt():
     opt = Namespace()
     # plotting
-    opt.plot_freq = 500
+    opt.plot_freq = 1000
     # dirs
     opt.data_dir = os.path.join('src', 'seq', 'data', '3chain')
     opt.out_dir = os.path.join(opt.data_dir, 'exp')
     # network
     opt.n_in = 2
-    opt.n_layers = 3
-    opt.n_hidden = 16
+    opt.n_layers = 1
+    opt.n_hidden = 3
     # training
-    opt.foreplay_iter= 0  # only fit, no acyclicity penalty
+    opt.pretrain_iter = 5000  # only fit, no acyclicity penalty
     opt.ITER = 30000
-    opt.REC_FREQ = opt.ITER/30
+    opt.REC_FREQ = opt.ITER/60
     opt.LR = 1e-3
     opt.mu_init = 1e-5
     opt.gamma_init = 1e-5
@@ -39,7 +39,10 @@ def get_opt():
     opt.sparsity = 0.  # see if zombie edges provide better regularization
     opt.zombie_threshold = 0.05
     opt.max_adj_entry = 5.
-    opt.indicate_missingness = False
+    # TODO if there is a way to get this to work, we have achieved real progress...
+    opt.start_adj_entry = -2.
+    opt.indicate_missingness = True
+    # TODO change is interesting but still takes very long
     opt.intervention_type = 'perfect' # ['perfect', 'imperfect', 'change']
     # save opt
     utils.snap(opt, fname='exp_options.txt')
@@ -68,6 +71,7 @@ if __name__ == '__main__':
         intervention_type=opt.intervention_type,
         intervention_knowledge='known',
         max_adj_entry=opt.max_adj_entry,
+        start_adj_entry=opt.start_adj_entry,
         indicate_missingness=opt.indicate_missingness,
         num_regimes=len(np.unique(regimes))
     )
@@ -97,8 +101,11 @@ if __name__ == '__main__':
 
 # TODO is there some connection to spectral biases?
 
-# TODO everything looks perfect. Why are we losing the wrong edge???
-# TODO only obs data, fit is not that good... density is kind of off...
-# why is the distribution such nonsense when the fit looks perfect???
+# TODO why is 'change' so slow?? 
 
-# TODO currently we can not even learn the simple observational case... what's the matter here?? something about regime etc.??
+# TODO many relationships don't look that complex. Maybe reduce network complexity for speedup?
+
+# TODO seems like the missingness indicator still screws things?
+# TODO encode missingness as super high/low value? might be a lot cheaper than the dummies...
+
+# TODO what about a pre-training phase with random dropouts???

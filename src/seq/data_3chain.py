@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # data
     opt.noise = 'gauss'
     opt.noise_means = (0., 0.)
-    opt.noise_variance = (1, 1)
+    opt.noise_variance = (2, 2)
     opt.edge_weight_range = (1, 1)
     opt.W_true = np.array([[0, 1],
                            [0, 0]])
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     opt.standardize_individually = False
 
     # create dataset
-    create_dataset(opt, obs=True, targets=[], 
+    create_dataset(opt, obs=True, targets=[0], 
         # nonlinear=lambda x: -0.05*x**4 + x**2
         transformation=[
             lambda x: x,
@@ -40,7 +40,3 @@ if __name__ == "__main__":
 
     # make sure everything went right
     inspect(opt.out_dir)
-
-# TODO we don''t seem to have any obs data for the moment?
-# TODO go check if this makes sense!
-# TODO see how/what zombie threshold actually does

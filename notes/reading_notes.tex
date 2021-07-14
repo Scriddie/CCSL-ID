@@ -115,8 +115,12 @@ Observations
     \item Remove zombie edges from acyclicity violation, too. They can just drag down good edges when penalty goes high very quickly
     \item The fact that the net is trying to fit the zeros induced by the gumbel adjacency looks to be a real problem, especially in an edge race. Maybe we should just predict zero in these cases without using the network? For multiple inputs, if some were masked out, we should indicate somehow that we didn't have this value (not the same as zero)?
     \item Confirmed: Even without any cycles, we can lose perfectly good edges if they just happen to have a rather low value. Is this because missingness isn't indicated??
-    \item Missingness indicator seems nice, but somehow we can't seem to fit the sinus curve well anymore
+    \item Missingness indicator seems nice, but somehow we can't seem to fit the sinus curve well anymore. Missingness indicator needs some more debugging...
     \item Seems like we have a bit of a different case where it's not the intervention that's imperfect but rather the intervention changing the causal relationship!
+    \item For x**2, we see the good edge falling even after it's opposite is gone! Is this because here we have a mismatch that we want to map zero to very different things??
+    \item We definitely need to start with high values, otherwise the frequent missingness fucks up the fit too much. Seems like a max value even higher than the start value also helps :). 
+    \item Once an edge goes below a certain threshold, the zero abiguity just throws it off. Is that remedied by individual scaling? 
+    \item Finding the right scale for the acyclicity violation is very hard! just setting some value might result in cycles in large graphs with high dag_normalization...
 \end{enumerate}
 
 \subsection{Which interventions to choose from}
